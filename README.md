@@ -1,0 +1,92 @@
+Stack
+
+Node.js
+
+Express.js
+
+MySQL (single instance, separate schema per service)
+
+Redis
+
+Docker + Docker Compose
+
+JWT Authentication
+
+Razorpay (configurable from admin)
+
+DB Outbox (no Kafka/RabbitMQ)
+
+Architecture
+Service	      Port	Schema	      Responsibility
+
+api-gateway	   3000	—	            Entry point, JWT validation, routing
+auth-service	4001	auth_schema	   Users, roles, JWT
+course-service	4002	course_schema	Courses, batches, sessions, materials
+order-service	4003	order_schema	Orders, payments, Razorpay, outbox
+admin-service	4004	admin_schema	Admin panel, audit, payment config
+
+Quick Start
+
+setup .env
+run -> docker compose up -d
+
+Development
+Start Infrastructure
+docker compose up -d mysql redis
+
+Install Dependencies
+npm install
+npm run install:all
+
+Seed super admin (auth-service)
+After MySQL and auth-service DB/schema are ready, create roles and a super_admin user for the admin panel:
+cd services/auth-service && npm run seed
+Default login: admin@studycafe.in / SuperAdmin@123 (override with SEED_SUPER_ADMIN_EMAIL and SEED_SUPER_ADMIN_PASSWORD).
+
+Granting permissions to admin users (admin panel)
+- In the admin app go to **Admin Users** → create or edit a user.
+- **Role** sets base permissions (Super Admin / Admin = full access; Editor / Viewer = limited).
+- Use **Additional permissions** to grant specific permissions on top of the role (e.g. give an Editor one extra permission).
+If you added this feature to an existing DB, run once from auth-service: `node scripts/add-permission-overrides-column.js` (with same env as the app) to add the `permission_overrides` column.
+
+Start All Services
+npm run dev
+
+
+Runs all services on ports 3000, 4001–4004.
+
+Common Issues
+
+**Docker not running / “Cannot connect to the Docker daemon”**
+
+You need Docker Desktop running for `npm run dev` (MySQL and Redis run in Docker).
+
+1. **Install Docker Desktop** (if needed): https://www.docker.com/products/docker-desktop/
+2. **Start Docker Desktop** from Applications (or the menu bar) and wait until it’s fully up.
+3. From the **studycafe-ms** directory run:
+   - `npm run dev` — tries to start Docker, then infra + fix-db + all services
+   - or, if Docker is already running: `npm run dev:up` — infra + fix-db + all services
+
+Ports in use (EADDRINUSE)
+Kill any process using ports 3000, 4001–4005 (e.g. leftover Node from a previous run), then start again:
+npm run dev:kill-ports
+npm run dev
+If you ran full Docker stack before, also: npm run dev:free-ports then npm run dev:infra
+
+MySQL “Access denied” for platform_user / auth_user / etc.
+The MySQL container needs schemas and users. Either:
+- Fresh start: remove the MySQL volume and run again so init runs: docker compose down -v then docker compose up -d mysql redis then npm run dev
+- Existing DB: apply the fix script (creates schemas and users): npm run dev:fix-db
+Then run npm run dev again.
+
+
+Docker network error
+
+docker compose down --remove-orphans
+docker network prune -f
+docker compose up -d mysql redis
+
+
+Local MySQL conflict
+
+Docker MySQL runs on port 3307

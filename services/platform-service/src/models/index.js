@@ -1,0 +1,61 @@
+const { Sequelize } = require('sequelize');
+const config = require('../config');
+
+const sequelize = new Sequelize(
+  config.mysql.database,
+  config.mysql.user,
+  config.mysql.password,
+  {
+    host: config.mysql.host,
+    port: config.mysql.port,
+    dialect: 'mysql',
+    logging: false,
+    pool: {
+      max: config.mysql.connectionLimit || 10,
+      min: 0,
+      acquire: 30000,
+      idle: 10000,
+    },
+    define: { underscored: true },
+  }
+);
+
+const Category = require('./Category')(sequelize);
+const Tag = require('./Tag')(sequelize);
+const ArticleType = require('./ArticleType')(sequelize);
+const Court = require('./Court')(sequelize);
+
+const ArticleCategoryMap = require('./ArticleCategoryMap')(sequelize);
+const ArticleTagMap = require('./ArticleTagMap')(sequelize);
+const ArticleTypeMap = require('./ArticleTypeMap')(sequelize);
+const ArticleCourtMap = require('./ArticleCourtMap')(sequelize);
+
+const Article = require('./Article')(sequelize);
+const Comment = require('./Comment')(sequelize);
+
+const HomeSection = require('./HomeSection')(sequelize);
+const State = require('./State')(sequelize);
+const Testimonial = require('./Testimonial')(sequelize);
+const FooterData = require('./FooterData')(sequelize);
+const PremiumPlan = require('./PremiumPlan')(sequelize);
+const PlanCourse = require('./PlanCourse')(sequelize);
+const PlanCourseCategory = require('./PlanCourseCategory')(sequelize);
+
+Article.associate({ Comment, Category, Tag, ArticleType, Court, ArticleCategoryMap, ArticleTagMap, ArticleTypeMap, ArticleCourtMap });
+
+const models = {
+  Article, Comment,
+  Category, Tag, ArticleType, Court,
+  ArticleCategoryMap, ArticleTagMap, ArticleTypeMap, ArticleCourtMap,
+  HomeSection, State, Testimonial, FooterData, PremiumPlan, PlanCourse, PlanCourseCategory,
+};
+
+async function connect() {
+  await sequelize.authenticate();
+}
+
+module.exports = {
+  sequelize,
+  ...models,
+  connect,
+};
