@@ -1,76 +1,45 @@
 const ordersService = require('../services/orders.service');
+const { asyncHandler, AppError, sendSuccess, sendCreated } = require('../../../../shared');
 
-async function create(req, res) {
-  const userId = req.userId;
-  const { type, entityId, amount, currency = 'INR' } = req.body;
-  if (!type || !entityId || !amount) {
-    return res.status(400).json({ error: 'type, entityId, amount required' });
-  }
-  if (!['course', 'membership'].includes(type)) {
-    return res.status(400).json({ error: 'type must be course or membership' });
-  }
-  try {
-    const result = await ordersService.createOrder(userId, { type, entityId, amount, currency });
-    if (result.error) {
-      if (result.code === 429) return res.status(429).json({ error: result.error });
-      return res.status(503).json({ error: result.error });
-    }
-    res.status(201).json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create order' });
-  }
-}
+const create = asyncHandler(async (req, res) => {
+  const result = await ordersService.createOrder(req.userId, req.body);
+  sendCreated(res, result);
+});
 
-async function verify(req, res) {
-  const userId = req.userId;
-  const { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-  if (!orderId || !razorpay_payment_id || !razorpay_signature) {
-    return res.status(400).json({ error: 'orderId, razorpay_payment_id, razorpay_signature required' });
-  }
-  try {
-    const result = await ordersService.verifyOrder(userId, {
-      orderId,
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-    });
-    if (result.error) {
-      if (result.status === 404) return res.status(404).json({ error: result.error });
-      return res.status(400).json({ error: result.error });
-    }
-    if (result.success) return res.json(result);
-    res.status(500).json({ error: 'Verification failed' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Verification failed' });
-  }
-}
+const verify = asyncHandler(async (req, res) => {
+  const result = await ordersService.verifyOrder(req.userId, req.body);
+  sendSuccess(res, result);
+});
 
-async function list(req, res) {
-  try {
-    const rows = await ordersService.listOrders(req.userId);
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch orders' });
-  }
-}
+const list = asyncHandler(async (req, res) => {
+  const rows = await ordersService.listOrders(req.userId);
+  sendSuccess(res, rows);
+});
 
-async function getInvoice(req, res) {
-  try {
-    const invoice = await ordersService.getInvoice(req.userId, req.params.orderId);
-    if (!invoice) return res.status(404).json({ error: 'Order not found' });
-    res.json(invoice);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch invoice' });
-  }
-}
+const getInvoice = asyncHandler(async (req, res) => {
+  const invoice = await ordersService.getInvoice(req.userId, req.params.orderId);
+  if (!invoice) throw new AppError('Order not found', 404);
+  sendSuccess(res, invoice);
+});
+
+const listAllInternal = asyncHandler(async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '100', 10), 500);
+  const offset = parseInt(req.query.offset || '0', 10);
+  const rows = await ordersService.listAllOrders(limit, offset);
+  sendSuccess(res, rows);
+});
+
+const getByOrderIdInternal = asyncHandler(async (req, res) => {
+  const order = await ordersService.getOrderByOrderId(req.params.orderId);
+  if (!order) throw new AppError('Order not found', 404);
+  sendSuccess(res, order);
+});
 
 module.exports = {
   create,
   verify,
   list,
   getInvoice,
+  listAllInternal,
+  getByOrderIdInternal,
 };

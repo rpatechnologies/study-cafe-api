@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { sequelize, Order, Payment, OutboxEvent } = require('../models');
 const { getRedis } = require('../config/redis');
 const { getRazorpayInstance, getRazorpayConfig } = require('./payment.service');
+const { AppError } = require('../../../../shared');
 
 function generateOrderId() {
   return 'ORD_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
@@ -9,14 +10,14 @@ function generateOrderId() {
 
 async function createOrder(userId, { type, entityId, amount, currency = 'INR' }) {
   const razorpay = await getRazorpayInstance();
-  if (!razorpay) return { error: 'Payment not configured' };
+  if (!razorpay) throw new AppError('Payment not configured', 503);
 
   const orderId = generateOrderId();
   const amountPaise = Math.round(parseFloat(amount) * 100);
   const lockKey = `order:lock:${userId}:${type}:${entityId}`;
   const redis = await getRedis();
   const locked = await redis.set(lockKey, '1', { NX: true, EX: 30 });
-  if (!locked) return { error: 'Duplicate order in progress', code: 429 };
+  if (!locked) throw new AppError('Duplicate order in progress', 429);
 
   try {
     const order = await Order.create({
@@ -45,19 +46,19 @@ async function createOrder(userId, { type, entityId, amount, currency = 'INR' })
       key: config?.key_id,
     };
   } catch (err) {
-    await redis.del(lockKey).catch(() => {});
+    await redis.del(lockKey).catch(() => { });
     throw err;
   }
 }
 
 async function verifyOrder(userId, { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature }) {
   const config = await getRazorpayConfig();
-  if (!config) return { error: 'Payment not configured' };
+  if (!config) throw new AppError('Payment not configured', 503);
   const expected = crypto
     .createHmac('sha256', config.key_secret)
     .update(razorpay_order_id + '|' + razorpay_payment_id)
     .digest('hex');
-  if (expected !== razorpay_signature) return { error: 'Invalid signature' };
+  if (expected !== razorpay_signature) throw new AppError('Invalid signature', 400);
 
   const t = await sequelize.transaction();
   try {
@@ -67,11 +68,11 @@ async function verifyOrder(userId, { orderId, razorpay_order_id, razorpay_paymen
     });
     if (!order) {
       await t.rollback();
-      return { error: 'Order not found', status: 404 };
+      throw new AppError('Order not found', 404);
     }
     if (order.status === 'paid') {
       await t.rollback();
-      return { success: true, message: 'Already paid' };
+      return { alreadyPaid: true, message: 'Already paid' };
     }
     await order.update({ status: 'paid' }, { transaction: t });
     await Payment.create(
@@ -115,10 +116,10 @@ async function verifyOrder(userId, { orderId, razorpay_order_id, razorpay_paymen
       );
     }
     await t.commit();
-    return { success: true };
+    return { verified: true };
   } catch (err) {
     await t.rollback();
-    if (err.name === 'SequelizeUniqueConstraintError') return { success: true };
+    if (err.name === 'SequelizeUniqueConstraintError') return { verified: true };
     throw err;
   }
 }
@@ -130,6 +131,32 @@ async function listOrders(userId) {
     attributes: ['order_id', 'type', 'entity_id', 'amount', 'currency', 'status', 'created_at'],
   });
   return rows.map((r) => r.get({ plain: true }));
+}
+
+async function listAllOrders(limit = 100, offset = 0) {
+  const rows = await Order.findAll({
+    order: [['created_at', 'DESC']],
+    attributes: ['id', 'order_id', 'user_id', 'type', 'entity_id', 'amount', 'currency', 'status', 'buyer_email', 'created_at'],
+    limit: Math.min(Number(limit) || 100, 500),
+    offset: Number(offset) || 0,
+  });
+  return rows.map((r) => r.get({ plain: true }));
+}
+
+async function getOrderByOrderId(orderId) {
+  const order = await Order.findOne({
+    where: { order_id: orderId },
+  });
+  if (!order) return null;
+  const payment = await Payment.findOne({
+    where: { order_id: order.id },
+    order: [['id', 'DESC']],
+  });
+  const p = order.get({ plain: true });
+  return {
+    ...p,
+    payment_id: payment ? payment.razorpay_payment_id : null,
+  };
 }
 
 async function getInvoice(userId, orderId) {
@@ -159,4 +186,6 @@ module.exports = {
   verifyOrder,
   listOrders,
   getInvoice,
+  listAllOrders,
+  getOrderByOrderId,
 };

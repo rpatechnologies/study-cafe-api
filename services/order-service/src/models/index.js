@@ -30,7 +30,7 @@ Payment.associate({ Order });
 
 async function connect() {
   await sequelize.authenticate();
-  await sequelize.sync({ alter: true });
+  await sequelize.sync();
 }
 
 module.exports = {

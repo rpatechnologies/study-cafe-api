@@ -12,7 +12,8 @@ async function validateJWT(req, res, next) {
       headers: { Authorization: `Bearer ${token}` },
       timeout: 5000,
     });
-    req.user = data;
+    const finalData = data.data || data;
+    req.user = finalData;
     next();
   } catch (err) {
     const status = err.response?.status || 500;
@@ -31,7 +32,8 @@ function optionalJWT(req, res, next) {
       timeout: 5000,
     })
     .then(({ data }) => {
-      req.user = data;
+      const finalData = data.data || data;
+      req.user = finalData;
       next();
     })
     .catch(() => next());
@@ -50,7 +52,8 @@ async function requireCourseAccess(req, res, next) {
       headers: { Authorization: auth },
       timeout: 5000,
     });
-    if (!data.allowed) {
+    const finalData = data.data || data;
+    if (!finalData.allowed) {
       return res.status(403).json({ error: 'Access denied to this course' });
     }
     next();

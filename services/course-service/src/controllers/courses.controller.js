@@ -1,155 +1,118 @@
 const coursesService = require('../services/courses.service');
+const { asyncHandler, AppError, sendSuccess, sendCreated } = require('../../../../shared');
 
-async function list(req, res) {
-  try {
-    const rows = await coursesService.listPublished();
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch courses' });
-  }
-}
+const list = asyncHandler(async (req, res) => {
+  const rows = await coursesService.listPublished();
+  sendSuccess(res, rows);
+});
 
-async function getById(req, res) {
-  try {
-    const course = await coursesService.getById(req.params.id);
-    if (!course) return res.status(404).json({ error: 'Course not found' });
-    res.json(course);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch course' });
-  }
-}
+const getById = asyncHandler(async (req, res) => {
+  const course = await coursesService.getById(req.params.id);
+  if (!course) throw new AppError('Course not found', 404);
+  sendSuccess(res, course);
+});
 
-async function getSessions(req, res) {
-  try {
-    const result = await coursesService.getSessionsByCourseId(req.params.id);
-    if (result === null) return res.status(404).json({ error: 'Course not found' });
-    res.json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch sessions' });
-  }
-}
+const getSessions = asyncHandler(async (req, res) => {
+  const result = await coursesService.getSessionsByCourseId(req.params.id);
+  if (result === null) throw new AppError('Course not found', 404);
+  sendSuccess(res, result);
+});
 
-async function getMaterials(req, res) {
-  try {
-    const rows = await coursesService.getMaterialsByCourseId(req.params.id);
-    if (rows === null) return res.status(404).json({ error: 'Course not found' });
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch materials' });
-  }
-}
+const getSessionsInternal = asyncHandler(async (req, res) => {
+  const result = await coursesService.getSessionsByCourseIdInternal(req.params.id);
+  if (result === null) throw new AppError('Course not found', 404);
+  sendSuccess(res, result);
+});
 
-async function createCourse(req, res) {
-  try {
-    const course = await coursesService.create(req.body);
-    res.status(201).json(course);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create course' });
-  }
-}
+const getMaterials = asyncHandler(async (req, res) => {
+  const rows = await coursesService.getMaterialsByCourseId(req.params.id);
+  if (rows === null) throw new AppError('Course not found', 404);
+  sendSuccess(res, rows);
+});
 
-async function updateCourse(req, res) {
-  try {
-    const course = await coursesService.update(req.params.id, req.body);
-    if (!course) return res.status(404).json({ error: 'Course not found' });
-    res.json(course);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update course' });
-  }
-}
+const createCourse = asyncHandler(async (req, res) => {
+  const course = await coursesService.create(req.body);
+  sendCreated(res, course);
+});
 
-async function createBatch(req, res) {
-  try {
-    const batch = await coursesService.createBatch(req.params.id, req.body);
-    res.status(201).json(batch);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create batch' });
-  }
-}
+const updateCourse = asyncHandler(async (req, res) => {
+  const course = await coursesService.update(req.params.id, req.body);
+  if (!course) throw new AppError('Course not found', 404);
+  sendSuccess(res, course);
+});
 
-async function updateBatch(req, res) {
-  try {
-    const batch = await coursesService.updateBatch(req.params.id, req.body);
-    if (!batch) return res.status(404).json({ error: 'Batch not found' });
-    res.json(batch);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update batch' });
-  }
-}
+const createBatch = asyncHandler(async (req, res) => {
+  const batch = await coursesService.createBatch(req.params.id, req.body);
+  sendCreated(res, batch);
+});
 
-async function createSession(req, res) {
-  try {
-    const session = await coursesService.createSession(req.params.id, req.body);
-    res.status(201).json(session);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create session' });
-  }
-}
+const updateBatch = asyncHandler(async (req, res) => {
+  const batch = await coursesService.updateBatch(req.params.id, req.body);
+  if (!batch) throw new AppError('Batch not found', 404);
+  sendSuccess(res, batch);
+});
 
-async function updateSession(req, res) {
-  try {
-    const session = await coursesService.updateSession(req.params.id, req.body);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json(session);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update session' });
-  }
-}
+const createSession = asyncHandler(async (req, res) => {
+  const session = await coursesService.createSession(req.params.id, req.body);
+  sendCreated(res, session);
+});
 
-async function addRecording(req, res) {
-  try {
-    const recording = await coursesService.addRecording(req.params.id, req.body);
-    res.status(201).json(recording);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to add recording' });
-  }
-}
+const updateSession = asyncHandler(async (req, res) => {
+  const session = await coursesService.updateSession(req.params.id, req.body);
+  if (!session) throw new AppError('Session not found', 404);
+  sendSuccess(res, session);
+});
 
-async function addMaterial(req, res) {
-  try {
-    const material = await coursesService.addMaterial(req.params.id, req.body);
-    res.status(201).json(material);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to add material' });
-  }
-}
+const addRecording = asyncHandler(async (req, res) => {
+  const recording = await coursesService.addRecording(req.params.id, req.body);
+  sendCreated(res, recording);
+});
 
-async function listAllInternal(req, res) {
-  try {
-    const rows = await coursesService.listAll();
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch courses' });
-  }
-}
+const updateRecording = asyncHandler(async (req, res) => {
+  const recording = await coursesService.updateRecording(req.params.id, req.body);
+  if (!recording) throw new AppError('Recording not found', 404);
+  sendSuccess(res, recording);
+});
 
-async function listCourseCatsInternal(req, res) {
-  try {
-    const rows = await coursesService.listCourseCats();
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch course categories' });
-  }
-}
+const addMaterial = asyncHandler(async (req, res) => {
+  const material = await coursesService.addMaterial(req.params.id, req.body);
+  sendCreated(res, material);
+});
+
+const listAllInternal = asyncHandler(async (req, res) => {
+  const rows = await coursesService.listAll();
+  sendSuccess(res, rows);
+});
+
+const listCourseCatsInternal = asyncHandler(async (req, res) => {
+  const rows = await coursesService.listCourseCats();
+  sendSuccess(res, rows);
+});
+
+const getByIdInternal = asyncHandler(async (req, res) => {
+  const course = await coursesService.getByIdInternal(req.params.id);
+  if (!course) throw new AppError('Course not found', 404);
+  sendSuccess(res, course);
+});
+
+const getPageSettings = asyncHandler(async (req, res) => {
+  const settings = await coursesService.getAllPageSettings();
+  sendSuccess(res, settings);
+});
+
+const updatePageSetting = asyncHandler(async (req, res) => {
+  const { key } = req.params;
+  const { value } = req.body;
+  if (!key) throw new AppError('Setting key is required', 400);
+  const result = await coursesService.upsertPageSetting(key, value);
+  sendSuccess(res, result);
+});
 
 module.exports = {
   list,
   getById,
   getSessions,
+  getSessionsInternal,
   getMaterials,
   createCourse,
   updateCourse,
@@ -158,7 +121,11 @@ module.exports = {
   createSession,
   updateSession,
   addRecording,
+  updateRecording,
   addMaterial,
   listAllInternal,
   listCourseCatsInternal,
+  getByIdInternal,
+  getPageSettings,
+  updatePageSetting,
 };

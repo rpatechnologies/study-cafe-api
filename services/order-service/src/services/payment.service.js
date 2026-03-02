@@ -13,8 +13,9 @@ async function getRazorpayConfig() {
       headers: { 'X-Internal-API-Key': config.internalApiKey },
       timeout: 5000,
     });
-    cachedConfig = data;
-    return data;
+    const finalData = data.data || data;
+    cachedConfig = finalData;
+    return finalData;
   } catch (_) {
     return cachedConfig || null;
   }

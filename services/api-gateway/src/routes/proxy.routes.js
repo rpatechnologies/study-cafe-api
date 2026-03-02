@@ -39,6 +39,11 @@ function register(app) {
     changeOrigin: true,
     pathRewrite: { '^/api/platform': '/platform' },
   });
+  const uploadsProxy = createProxyMiddleware({
+    target: config.platformServiceUrl,
+    changeOrigin: true,
+    pathRewrite: { '^/api/uploads': '/platform/uploads' },
+  });
 
   const usersProxy = createProxyMiddleware({
     target: config.authServiceUrl,
@@ -56,6 +61,7 @@ function register(app) {
   app.use('/api/orders', validateJWT, orderProxy);
   app.use('/api/admin', validateJWT, adminProxy);
   app.use('/api/platform', platformProxy);
+  app.use('/api/uploads', uploadsProxy);
 }
 
 module.exports = { register };

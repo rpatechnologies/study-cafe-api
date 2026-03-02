@@ -33,6 +33,7 @@ const ArticleCourtMap = require('./ArticleCourtMap')(sequelize);
 const Article = require('./Article')(sequelize);
 const Comment = require('./Comment')(sequelize);
 
+const CmsPage = require('./CmsPage')(sequelize);
 const HomeSection = require('./HomeSection')(sequelize);
 const State = require('./State')(sequelize);
 const Testimonial = require('./Testimonial')(sequelize);
@@ -47,6 +48,7 @@ const models = {
   Article, Comment,
   Category, Tag, ArticleType, Court,
   ArticleCategoryMap, ArticleTagMap, ArticleTypeMap, ArticleCourtMap,
+  CmsPage,
   HomeSection, State, Testimonial, FooterData, PremiumPlan, PlanCourse, PlanCourseCategory,
 };
 

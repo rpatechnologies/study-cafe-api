@@ -1,11 +1,11 @@
-const { Course, CourseCat, Batch, Session, Recording, Material } = require('../models');
+const { Course, CourseCat, Batch, Session, Recording, Material, CoursePageSetting } = require('../models');
 
 const coursesService = {
   async listPublished() {
     const rows = await Course.findAll({
       where: { is_published: true },
       order: [['created_at', 'DESC']],
-      attributes: ['id', 'title', 'description', 'price', 'is_published', 'created_at'],
+      attributes: ['id', 'title', 'brief_description', 'price', 'sale_price', 'thumbnail_url', 'is_published', 'created_at'],
     });
     return rows.map((r) => r.get({ plain: true }));
   },
@@ -13,7 +13,7 @@ const coursesService = {
   async listAll() {
     const rows = await Course.findAll({
       order: [['id', 'ASC']],
-      attributes: ['id', 'title', 'description', 'price', 'is_published', 'created_at'],
+      attributes: ['id', 'title', 'brief_description', 'price', 'sale_price', 'thumbnail_url', 'is_published', 'created_at'],
     });
     return rows.map((r) => r.get({ plain: true }));
   },
@@ -29,8 +29,12 @@ const coursesService = {
   async getById(id) {
     const row = await Course.findOne({
       where: { id, is_published: true },
-      attributes: ['id', 'title', 'description', 'price', 'is_published', 'created_at'],
     });
+    return row ? row.get({ plain: true }) : null;
+  },
+
+  async getByIdInternal(id) {
+    const row = await Course.findByPk(id);
     return row ? row.get({ plain: true }) : null;
   },
 
@@ -40,7 +44,17 @@ const coursesService = {
       attributes: ['id'],
     });
     if (!course) return null;
+    return this._getBatchesSessionsRecordings(courseId);
+  },
 
+  /** Same as getSessionsByCourseId but without is_published filter (for admin). */
+  async getSessionsByCourseIdInternal(courseId) {
+    const course = await Course.findByPk(courseId, { attributes: ['id'] });
+    if (!course) return null;
+    return this._getBatchesSessionsRecordings(courseId);
+  },
+
+  async _getBatchesSessionsRecordings(courseId) {
     const batches = await Batch.findAll({
       where: { course_id: courseId },
       order: [['start_date', 'ASC']],
@@ -91,26 +105,53 @@ const coursesService = {
   },
 
   async create(data) {
-    const { title, description, price, is_published } = data;
     const row = await Course.create({
-      title: title || '',
-      description: description || null,
-      price: price ?? 0,
-      is_published: !!is_published,
+      title: data.title || '',
+      short_title: data.short_title || null,
+      slug: data.slug || null,
+      brief_description: data.brief_description || null,
+      description: data.description || null,
+      curriculum: data.curriculum || null,
+      learn_outcomes: data.learn_outcomes || null,
+      requirements: data.requirements || null,
+      terms_conditions: data.terms_conditions || null,
+      price: data.price ?? 0,
+      sale_price: data.sale_price !== undefined ? data.sale_price : null,
+      thumbnail_url: data.thumbnail_url || null,
+      youtube_url: data.youtube_url || null,
+      language: data.language || null,
+      course_type: data.course_type || null,
+      taxable: !!data.taxable,
+      keywords: data.keywords || null,
+      faqs: data.faqs || null,
+      feedback: data.feedback || null,
+      includes_info: data.includes_info || null,
+      certifications: data.certifications || null,
+      gateway: data.gateway || null,
+      is_published: !!data.is_published,
+      start_date: data.start_date || null,
+      end_date: data.end_date || null,
     });
     return row.get({ plain: true });
   },
 
   async update(id, data) {
-    const { title, description, price, is_published } = data;
     const row = await Course.findByPk(id);
     if (!row) return null;
-    await row.update({
-      ...(title !== undefined && { title }),
-      ...(description !== undefined && { description }),
-      ...(price !== undefined && { price }),
-      ...(is_published !== undefined && { is_published: !!is_published }),
-    });
+    const updatableFields = [
+      'title', 'short_title', 'slug', 'brief_description', 'description',
+      'curriculum', 'learn_outcomes', 'requirements', 'terms_conditions',
+      'price', 'sale_price', 'thumbnail_url', 'youtube_url', 'language',
+      'course_type', 'taxable', 'keywords', 'faqs', 'feedback', 'includes_info',
+      'certifications', 'gateway', 'is_published', 'start_date', 'end_date'
+    ];
+    const updatePayload = {};
+    for (const field of updatableFields) {
+      if (data[field] !== undefined) {
+        updatePayload[field] = data[field];
+      }
+    }
+    await row.update(updatePayload);
     return row.get({ plain: true });
   },
 
@@ -174,6 +215,16 @@ const coursesService = {
     return row.get({ plain: true });
   },
 
+  async updateRecording(recordingId, data) {
+    const row = await Recording.findByPk(recordingId);
+    if (!row) return null;
+    const { url, source } = data;
+    if (url !== undefined) row.url = url || '';
+    if (source !== undefined) row.source = source || null;
+    await row.save();
+    return row.get({ plain: true });
+  },
+
   async addMaterial(courseId, data) {
     const { title, url, type } = data;
     const row = await Material.create({
@@ -182,6 +233,29 @@ const coursesService = {
       url: url || '',
       type: type || null,
     });
+    return row.get({ plain: true });
+  },
+
+  // ---- Course Page Settings ----
+  async getAllPageSettings() {
+    const rows = await CoursePageSetting.findAll({ order: [['setting_key', 'ASC']] });
+    const result = {};
+    for (const r of rows) {
+      result[r.setting_key] = r.setting_value;
+    }
+    return result;
+  },
+
+  async getPageSetting(key) {
+    const row = await CoursePageSetting.findOne({ where: { setting_key: key } });
+    return row ? row.setting_value : null;
+  },
+
+  async upsertPageSetting(key, value) {
+    const [row] = await CoursePageSetting.upsert(
+      { setting_key: key, setting_value: value },
+      { returning: true }
+    );
     return row.get({ plain: true });
   },
 };

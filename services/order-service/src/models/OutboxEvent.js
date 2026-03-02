@@ -11,6 +11,8 @@ module.exports = (sequelize) => {
       payload: { type: DataTypes.JSON, allowNull: false },
       status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'pending' },
       processed_at: { type: DataTypes.DATE, allowNull: true },
+      retry_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+      next_retry_at: { type: DataTypes.DATE, allowNull: true },
     },
     {
       tableName: 'outbox_events',

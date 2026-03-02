@@ -1,9 +1,18 @@
+const { Op } = require('sequelize');
 const axios = require('axios');
 const { OutboxEvent } = require('../models');
 const config = require('../config');
+const { logger } = require('../../../../shared');
+
+const MAX_RETRIES = 5;
+
+function getBackoffMs(retryCount) {
+  // Exponential backoff: 2^retry seconds, capped at 5 min
+  return Math.min(Math.pow(2, retryCount) * 1000, 5 * 60 * 1000);
+}
 
 async function processEvent(record) {
-  const { id, event_type, payload } = record;
+  const { id, event_type, payload, retry_count } = record;
   const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
   try {
     if (event_type === 'COURSE_PURCHASED') {
@@ -33,15 +42,34 @@ async function processEvent(record) {
       { status: 'processed', processed_at: new Date() },
       { where: { id } }
     );
+    logger.info(`Outbox event ${id} processed`);
   } catch (err) {
-    console.error('Outbox process failed:', id, err.message);
-    await OutboxEvent.update({ status: 'failed' }, { where: { id } });
+    const nextRetry = (retry_count || 0) + 1;
+    if (nextRetry >= MAX_RETRIES) {
+      await OutboxEvent.update({ status: 'failed', retry_count: nextRetry }, { where: { id } });
+      logger.error(`Outbox event ${id} permanently failed after ${nextRetry} attempts: ${err.message}`);
+    } else {
+      const nextRetryAt = new Date(Date.now() + getBackoffMs(nextRetry));
+      await OutboxEvent.update(
+        { status: 'retrying', retry_count: nextRetry, next_retry_at: nextRetryAt },
+        { where: { id } }
+      );
+      logger.warn(`Outbox event ${id} failed (attempt ${nextRetry}/${MAX_RETRIES}), retrying at ${nextRetryAt.toISOString()}`);
+    }
   }
 }
 
 async function poll() {
   const rows = await OutboxEvent.findAll({
-    where: { status: 'pending' },
+    where: {
+      [Op.or]: [
+        { status: 'pending' },
+        {
+          status: 'retrying',
+          next_retry_at: { [Op.lte]: new Date() },
+        },
+      ],
+    },
     order: [['id', 'ASC']],
     limit: 10,
   });
@@ -54,7 +82,7 @@ function startOutboxWorker() {
   const pollMs = config.outbox.pollMs;
   setInterval(poll, pollMs);
   poll();
-  console.log('Outbox worker started');
+  logger.info('Outbox worker started');
 }
 
 module.exports = { startOutboxWorker, processEvent };

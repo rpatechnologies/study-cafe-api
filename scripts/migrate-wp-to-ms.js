@@ -18,7 +18,7 @@
 
 'use strict';
 
-try { require('dotenv').config(); } catch (_) {}
+try { require('dotenv').config(); } catch (_) { }
 
 const { Sequelize, QueryTypes } = require('sequelize');
 
@@ -75,6 +75,11 @@ async function main() {
     await createAllTables(tgt);
     console.log('✅ All tables created / synced.\n');
 
+    // ──────────── Clear existing data on target (3307) ────────────
+    console.log('🗑️  Clearing existing data on target DB...');
+    await clearTargetDatabase(tgt);
+    console.log('✅ Target DB cleared.\n');
+
     // ──────────── Migrate data ────────────
     await migrateUsers(src, tgt);
     await migrateUserMemberships(src, tgt);
@@ -89,6 +94,9 @@ async function main() {
     await migrateArticleJunctions(src, tgt);
     await migrateComments(src, tgt);
     await migrateCourses(src, tgt);
+    await migrateBatches(src, tgt);
+    await migrateSessions(src, tgt);
+    await migrateRecordings(src, tgt);
     await migratePlanCourses(src, tgt);
     await migrateCourseJunctions(src, tgt);
     await migrateOrders(src, tgt);
@@ -96,6 +104,7 @@ async function main() {
     await migrateFiles(src, tgt);
     await migrateFileCategories(src, tgt);
     await migratePages(src, tgt);
+    await seedCmsPagesFromSource(src, tgt);
     await migrateRedirections(src, tgt);
     await migrateMedia(src, tgt);
     await migrateForumTopics(src, tgt);
@@ -392,6 +401,17 @@ async function createAllTables(tgt) {
       updated_at DATETIME
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+    -- CMS pages (editable page content, never truncated by migration)
+    CREATE TABLE IF NOT EXISTS cms_pages (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(100) NOT NULL UNIQUE,
+      title VARCHAR(500),
+      content LONGTEXT,
+      meta JSON,
+      created_at DATETIME,
+      updated_at DATETIME
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
     -- Redirections (platform-service)
     CREATE TABLE IF NOT EXISTS redirections (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -517,9 +537,12 @@ async function createAllTables(tgt) {
       id INT AUTO_INCREMENT PRIMARY KEY,
       aggregate_type VARCHAR(64) NOT NULL DEFAULT 'order',
       aggregate_id VARCHAR(128) NOT NULL,
-      event_type VARCHAR(128) NOT NULL,
+      event_type VARCHAR(64) NOT NULL,
       payload JSON NOT NULL,
-      published TINYINT(1) NOT NULL DEFAULT 0,
+      status VARCHAR(32) NOT NULL DEFAULT 'pending',
+      processed_at DATETIME NULL,
+      retry_count INT NOT NULL DEFAULT 0,
+      next_retry_at DATETIME NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -656,6 +679,30 @@ async function ensurePremiumPlansColumns(tgt) {
         } catch (e) {
             if (e.original && e.original.code !== 'ER_DUP_FIELDNAME') throw e;
         }
+    }
+}
+
+/** Truncate all data tables on target (3307) so we can do a full re-sync. */
+async function clearTargetDatabase(tgt) {
+    const tables = [
+        'plan_course_categories', 'plan_courses', 'premium_plans', 'footer_data', 'testimonials', 'states', 'home_sections',
+        'payment_config', 'admin_logs', 'coupons', 'outbox_events', 'payments', 'orders', 'materials', 'recordings', 'sessions',
+        'batches', 'enrollments', 'course_authors', 'forum_topics', 'media', 'redirections', 'pages', 'file_categories', 'files',
+        'file_cats', 'course_categories', 'course_cats', 'courses', 'comments', 'article_courts', 'article_types_map', 'article_tags',
+        'article_categories', 'articles', 'courts', 'article_types', 'tags', 'categories', 'user_memberships', 'user_courses', 'users', 'roles',
+    ];
+    await tgt.query('SET FOREIGN_KEY_CHECKS = 0', { raw: true });
+    try {
+        for (const table of tables) {
+            try {
+                await tgt.query(`TRUNCATE TABLE \`${table}\``, { raw: true });
+            } catch (e) {
+                if (e.original && e.original.code === 'ER_NO_SUCH_TABLE') continue;
+                throw e;
+            }
+        }
+    } finally {
+        await tgt.query('SET FOREIGN_KEY_CHECKS = 1', { raw: true });
     }
 }
 
@@ -809,7 +856,7 @@ async function migratePremiumPlans(src, tgt) {
                     const arr = Array.isArray(parsed) ? parsed : (parsed && parsed.length ? [parsed] : []);
                     const titles = arr.map((x) => (x && (x.title || x.name)) ? String(x.title || x.name).trim() : null).filter(Boolean);
                     featuresJson = JSON.stringify(titles.length ? titles : []);
-                } catch (_) {}
+                } catch (_) { }
             }
             await tgt.query(
                 `INSERT INTO premium_plans (name, slug, description, price, currency, duration_days, is_lifetime, features, sort_order, is_active)
@@ -1005,7 +1052,7 @@ async function migratePlanCourses(src, tgt) {
                     { replacements: [planId, courseId], raw: true }
                 );
                 inserted++;
-            } catch (_) {}
+            } catch (_) { }
         }
     }
     console.log(`   ✅ ${inserted} plan–course links`);
@@ -1179,6 +1226,72 @@ async function migrateCourses(src, tgt) {
     console.log(`   ✅ ${rows.length} courses`);
 }
 
+/** Migrate batches (course batches). Source: batches or sc_batches if present. */
+async function migrateBatches(src, tgt) {
+    const tables = await src.query(
+        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('batches', 'sc_batches')",
+        { type: QueryTypes.SELECT }
+    );
+    const name = tables.some(t => t.TABLE_NAME === 'sc_batches') ? 'sc_batches' : (tables.some(t => t.TABLE_NAME === 'batches') ? 'batches' : null);
+    if (!name) { console.log('   ⏭️  No batches/sc_batches in source; skip.'); return; }
+    console.log('📦 Migrating batches...');
+    const rows = await src.query(`SELECT * FROM \`${name}\` ORDER BY id`, { type: QueryTypes.SELECT });
+    if (!rows.length) { console.log('   ✅ 0 batches'); return; }
+    const courseIds = await tgt.query('SELECT id FROM courses', { type: QueryTypes.SELECT });
+    const validIds = new Set((courseIds || []).map(r => r.id));
+    const filtered = rows.filter(r => validIds.has(r.course_id));
+    for (let i = 0; i < filtered.length; i += BATCH) {
+        const chunk = filtered.slice(i, i + BATCH);
+        const values = chunk.map(b => `(${b.id}, ${b.course_id}, ${esc(b.name)}, ${escDate(b.start_date)}, ${escDate(b.end_date)}, ${esc(b.meet_link)})`).join(',');
+        await tgt.query(`INSERT INTO batches (id, course_id, name, start_date, end_date, meet_link) VALUES ${values}`, { raw: true });
+    }
+    console.log(`   ✅ ${filtered.length} batches`);
+}
+
+/** Migrate sessions (batch days). Source: sessions or sc_sessions if present. */
+async function migrateSessions(src, tgt) {
+    const tables = await src.query(
+        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('sessions', 'sc_sessions')",
+        { type: QueryTypes.SELECT }
+    );
+    const name = tables.some(t => t.TABLE_NAME === 'sc_sessions') ? 'sc_sessions' : (tables.some(t => t.TABLE_NAME === 'sessions') ? 'sessions' : null);
+    if (!name) { console.log('   ⏭️  No sessions/sc_sessions in source; skip.'); return; }
+    console.log('📅 Migrating sessions...');
+    const batchIds = await tgt.query('SELECT id FROM batches', { type: QueryTypes.SELECT });
+    const validBatchIds = new Set((batchIds || []).map(r => r.id));
+    const rows = await src.query(`SELECT * FROM \`${name}\` ORDER BY id`, { type: QueryTypes.SELECT });
+    const filtered = rows.filter(r => validBatchIds.has(r.batch_id));
+    if (!filtered.length) { console.log('   ✅ 0 sessions'); return; }
+    for (let i = 0; i < filtered.length; i += BATCH) {
+        const chunk = filtered.slice(i, i + BATCH);
+        const values = chunk.map(s => `(${s.id}, ${s.batch_id}, ${s.day_number ?? 1}, ${esc(s.title)}, ${escDate(s.scheduled_at)}, ${esc(s.meet_link)})`).join(',');
+        await tgt.query(`INSERT INTO sessions (id, batch_id, day_number, title, scheduled_at, meet_link) VALUES ${values}`, { raw: true });
+    }
+    console.log(`   ✅ ${filtered.length} sessions`);
+}
+
+/** Migrate recordings (per-session recording links). Source: recordings or sc_recordings if present. */
+async function migrateRecordings(src, tgt) {
+    const tables = await src.query(
+        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('recordings', 'sc_recordings')",
+        { type: QueryTypes.SELECT }
+    );
+    const name = tables.some(t => t.TABLE_NAME === 'sc_recordings') ? 'sc_recordings' : (tables.some(t => t.TABLE_NAME === 'recordings') ? 'recordings' : null);
+    if (!name) { console.log('   ⏭️  No recordings/sc_recordings in source; skip.'); return; }
+    console.log('🎬 Migrating recordings...');
+    const sessionIds = await tgt.query('SELECT id FROM sessions', { type: QueryTypes.SELECT });
+    const validSessionIds = new Set((sessionIds || []).map(r => r.id));
+    const rows = await src.query(`SELECT * FROM \`${name}\` ORDER BY id`, { type: QueryTypes.SELECT });
+    const filtered = rows.filter(r => validSessionIds.has(r.session_id));
+    if (!filtered.length) { console.log('   ✅ 0 recordings'); return; }
+    for (let i = 0; i < filtered.length; i += BATCH) {
+        const chunk = filtered.slice(i, i + BATCH);
+        const values = chunk.map(r => `(${r.id}, ${r.session_id}, ${esc(r.url)}, ${esc(r.source)})`).join(',');
+        await tgt.query(`INSERT INTO recordings (id, session_id, url, source) VALUES ${values}`, { raw: true });
+    }
+    console.log(`   ✅ ${filtered.length} recordings`);
+}
+
 async function migrateCourseJunctions(src, tgt) {
     console.log('🔗 Migrating course junctions...');
     const cats = await src.query('SELECT * FROM sc_course_categories', { type: QueryTypes.SELECT });
@@ -1261,6 +1374,8 @@ async function migrateFileCategories(src, tgt) {
     }
 }
 
+const CMS_PAGE_SLUGS = ['home', 'about', 'contact', 'privacy-policy', 'ethics-policy', 'terms-of-use', 'disclaimer', 'refund-policy'];
+
 async function migratePages(src, tgt) {
     console.log('📄 Migrating pages...');
     try {
@@ -1275,6 +1390,35 @@ async function migratePages(src, tgt) {
         console.log(`   ✅ ${rows.length} pages`);
     } catch (e) {
         if (e.message && e.message.includes("doesn't exist")) { console.log('   ⏭️  sc_pages not in source, skip'); return; }
+        throw e;
+    }
+}
+
+/** Seed cms_pages from WP source only for slugs we manage; never overwrite existing rows (preserve our edits). */
+async function seedCmsPagesFromSource(src, tgt) {
+    console.log('📄 Seeding cms_pages (only missing slugs)...');
+    try {
+        const existing = await tgt.query('SELECT slug FROM cms_pages', { type: QueryTypes.SELECT });
+        const existingSlugs = new Set((existing || []).map((r) => r.slug));
+        const placeholders = CMS_PAGE_SLUGS.map(() => '?').join(',');
+        const rows = await src.query(
+            `SELECT slug, title, content FROM sc_pages WHERE slug IN (${placeholders})`,
+            { replacements: CMS_PAGE_SLUGS, type: QueryTypes.SELECT }
+        );
+        let inserted = 0;
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        for (const p of rows) {
+            if (!p.slug || existingSlugs.has(p.slug)) continue;
+            await tgt.query(
+                'INSERT INTO cms_pages (slug, title, content, meta, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)',
+                { replacements: [p.slug, p.title || p.slug, p.content || null, now, now], raw: true }
+            );
+            existingSlugs.add(p.slug);
+            inserted++;
+        }
+        console.log(`   ✅ cms_pages: ${inserted} seeded (existing rows preserved)`);
+    } catch (e) {
+        if (e.message && e.message.includes("doesn't exist")) { console.log('   ⏭️  sc_pages or cms_pages not present, skip'); return; }
         throw e;
     }
 }

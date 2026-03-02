@@ -1,374 +1,249 @@
 const platformService = require('../services/platform.service');
+const { asyncHandler, AppError, sendSuccess, sendCreated, sendNoContent, sendPaginated } = require('../../../../shared');
 
-async function getHome(req, res) {
-  try {
-    const data = await platformService.home.getHomePublic();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch home data' });
-  }
-}
+// ── Home ───────────────────────────────────────────────────────────
 
-async function getHomeSectionsInternal(req, res) {
-  try {
-    const data = await platformService.home.getHomeSectionsInternal();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch home sections' });
-  }
-}
+const getHome = asyncHandler(async (req, res) => {
+  const data = await platformService.home.getHomePublic();
+  sendSuccess(res, data);
+});
 
-async function upsertHomeSection(req, res) {
-  try {
-    const data = await platformService.home.upsertHomeSection(req.params.key, req.body);
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update home section' });
-  }
-}
+const getHomeSectionsInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.home.getHomeSectionsInternal();
+  sendSuccess(res, data);
+});
 
-async function getStates(req, res) {
-  try {
-    const data = await platformService.states.getStatesPublic();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch states' });
-  }
-}
+const upsertHomeSection = asyncHandler(async (req, res) => {
+  const data = await platformService.home.upsertHomeSection(req.params.key, req.body);
+  sendSuccess(res, data);
+});
 
-async function getStatesInternal(req, res) {
-  try {
-    const data = await platformService.states.getStatesInternal();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch states' });
-  }
-}
+// ── States ─────────────────────────────────────────────────────────
 
-async function createState(req, res) {
-  try {
-    const data = await platformService.states.createState(req.body);
-    res.status(201).json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create state' });
-  }
-}
+const getStates = asyncHandler(async (req, res) => {
+  const data = await platformService.states.getStatesPublic();
+  sendSuccess(res, data);
+});
 
-async function updateState(req, res) {
-  try {
-    const data = await platformService.states.updateState(req.params.id, req.body);
-    if (!data) return res.status(404).json({ error: 'State not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update state' });
-  }
-}
+const getStatesInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.states.getStatesInternal();
+  sendSuccess(res, data);
+});
 
-async function getTestimonials(req, res) {
-  try {
-    const featured = req.query.featured === '1' || req.query.featured === 'true';
-    const data = await platformService.testimonials.getTestimonialsPublic(featured);
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch testimonials' });
-  }
-}
+const createState = asyncHandler(async (req, res) => {
+  const data = await platformService.states.createState(req.body);
+  sendCreated(res, data);
+});
 
-async function getTestimonialsInternal(req, res) {
-  try {
-    const data = await platformService.testimonials.getTestimonialsInternal();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch testimonials' });
-  }
-}
+const updateState = asyncHandler(async (req, res) => {
+  const data = await platformService.states.updateState(req.params.id, req.body);
+  if (!data) throw new AppError('State not found', 404);
+  sendSuccess(res, data);
+});
 
-async function createTestimonial(req, res) {
-  try {
-    const data = await platformService.testimonials.createTestimonial(req.body);
-    res.status(201).json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create testimonial' });
-  }
-}
+// ── Testimonials ───────────────────────────────────────────────────
 
-async function updateTestimonial(req, res) {
-  try {
-    const data = await platformService.testimonials.updateTestimonial(req.params.id, req.body);
-    if (!data) return res.status(404).json({ error: 'Testimonial not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update testimonial' });
-  }
-}
+const getTestimonials = asyncHandler(async (req, res) => {
+  const featured = req.query.featured === '1' || req.query.featured === 'true';
+  const data = await platformService.testimonials.getTestimonialsPublic(featured);
+  sendSuccess(res, data);
+});
 
-async function deleteTestimonial(req, res) {
-  try {
-    const ok = await platformService.testimonials.deleteTestimonial(req.params.id);
-    if (!ok) return res.status(404).json({ error: 'Testimonial not found' });
-    res.status(204).send();
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete testimonial' });
-  }
-}
+const getTestimonialsInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.testimonials.getTestimonialsInternal();
+  sendSuccess(res, data);
+});
 
-async function getFooter(req, res) {
-  try {
-    const data = await platformService.footer.getFooterPublic();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch footer data' });
-  }
-}
+const createTestimonial = asyncHandler(async (req, res) => {
+  const data = await platformService.testimonials.createTestimonial(req.body);
+  sendCreated(res, data);
+});
 
-async function getFooterInternal(req, res) {
-  try {
-    const data = await platformService.footer.getFooterInternal();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch footer data' });
-  }
-}
+const updateTestimonial = asyncHandler(async (req, res) => {
+  const data = await platformService.testimonials.updateTestimonial(req.params.id, req.body);
+  if (!data) throw new AppError('Testimonial not found', 404);
+  sendSuccess(res, data);
+});
 
-async function upsertFooter(req, res) {
-  try {
-    const data = await platformService.footer.upsertFooter(req.params.key, req.body);
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update footer' });
-  }
-}
+const deleteTestimonial = asyncHandler(async (req, res) => {
+  const ok = await platformService.testimonials.deleteTestimonial(req.params.id);
+  if (!ok) throw new AppError('Testimonial not found', 404);
+  sendNoContent(res);
+});
 
-async function getPlans(req, res) {
-  try {
-    const data = await platformService.plans.getPlansPublic();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch plans' });
-  }
-}
+// ── Footer ─────────────────────────────────────────────────────────
 
-async function getPlanBySlug(req, res) {
-  try {
-    const data = await platformService.plans.getPlanBySlugPublic(req.params.slug);
-    if (!data) return res.status(404).json({ error: 'Plan not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch plan' });
-  }
-}
+const getFooter = asyncHandler(async (req, res) => {
+  const data = await platformService.footer.getFooterPublic();
+  sendSuccess(res, data);
+});
 
-async function getPlansInternal(req, res) {
-  try {
-    const data = await platformService.plans.getPlansInternal();
-    res.json({ data });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch plans' });
-  }
-}
+const getFooterInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.footer.getFooterInternal();
+  sendSuccess(res, data);
+});
 
-async function getPlanByIdInternal(req, res) {
-  try {
-    const data = await platformService.plans.getPlanByIdInternal(req.params.id);
-    if (!data) return res.status(404).json({ error: 'Plan not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch plan' });
-  }
-}
+const upsertFooter = asyncHandler(async (req, res) => {
+  const data = await platformService.footer.upsertFooter(req.params.key, req.body);
+  sendSuccess(res, data);
+});
 
-async function createPlan(req, res) {
-  try {
-    const data = await platformService.plans.createPlan(req.body);
-    res.status(201).json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create plan' });
-  }
-}
+// ── Plans ──────────────────────────────────────────────────────────
 
-async function updatePlan(req, res) {
-  try {
-    const data = await platformService.plans.updatePlan(req.params.id, req.body);
-    if (!data) return res.status(404).json({ error: 'Plan not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update plan' });
-  }
-}
+const getPlans = asyncHandler(async (req, res) => {
+  const data = await platformService.plans.getPlansPublic();
+  sendSuccess(res, data);
+});
 
-async function deletePlan(req, res) {
-  try {
-    const ok = await platformService.plans.deletePlan(req.params.id);
-    if (!ok) return res.status(404).json({ error: 'Plan not found' });
-    res.status(204).send();
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete plan' });
-  }
-}
+const getPlanBySlug = asyncHandler(async (req, res) => {
+  const data = await platformService.plans.getPlanBySlugPublic(req.params.slug);
+  if (!data) throw new AppError('Plan not found', 404);
+  sendSuccess(res, data);
+});
 
-async function getArticles(req, res) {
-  try {
-    const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
-    const offset = parseInt(req.query.offset || '0', 10);
-    const data = await platformService.articles.getArticlesPublic(limit, offset);
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch articles' });
-  }
-}
+const getPlansInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.plans.getPlansInternal();
+  sendSuccess(res, data);
+});
 
-async function getArticleBySlug(req, res) {
-  try {
-    const data = await platformService.articles.getArticleBySlugPublic(req.params.slug);
-    if (!data) return res.status(404).json({ error: 'Article not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch article' });
-  }
-}
+const getPlanByIdInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.plans.getPlanByIdInternal(req.params.id);
+  if (!data) throw new AppError('Plan not found', 404);
+  sendSuccess(res, data);
+});
 
-async function getArticlesInternal(req, res) {
-  try {
-    const page = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '10', 10)));
-    const search = req.query.search ? String(req.query.search).trim() : undefined;
-    const sortBy = req.query.sortBy ? String(req.query.sortBy).trim() : undefined;
-    const sortOrder = (req.query.sortOrder && /^(ASC|DESC)$/i.test(req.query.sortOrder))
-      ? req.query.sortOrder.toUpperCase()
-      : 'DESC';
+const createPlan = asyncHandler(async (req, res) => {
+  const data = await platformService.plans.createPlan(req.body);
+  sendCreated(res, data);
+});
 
-    const result = await platformService.articles.getArticlesInternal({
-      status: req.query.status,
-      page,
-      limit,
-      search: search || undefined,
-      sortBy,
-      sortOrder,
-    });
+const updatePlan = asyncHandler(async (req, res) => {
+  const data = await platformService.plans.updatePlan(req.params.id, req.body);
+  if (!data) throw new AppError('Plan not found', 404);
+  sendSuccess(res, data);
+});
 
-    res.json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch articles' });
-  }
-}
+const deletePlan = asyncHandler(async (req, res) => {
+  const ok = await platformService.plans.deletePlan(req.params.id);
+  if (!ok) throw new AppError('Plan not found', 404);
+  sendNoContent(res);
+});
 
-async function getArticleByIdInternal(req, res) {
-  try {
-    const data = await platformService.articles.getArticleByIdInternal(req.params.id);
-    if (!data) return res.status(404).json({ error: 'Article not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch article' });
-  }
-}
+// ── Articles ───────────────────────────────────────────────────────
 
-async function createArticle(req, res) {
-  try {
-    const data = await platformService.articles.createArticle(req.body);
-    res.status(201).json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create article' });
-  }
-}
+const getArticles = asyncHandler(async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+  const offset = parseInt(req.query.offset || '0', 10);
+  const data = await platformService.articles.getArticlesPublic(limit, offset);
+  sendSuccess(res, data);
+});
 
-async function updateArticle(req, res) {
-  try {
-    const data = await platformService.articles.updateArticle(req.params.id, req.body);
-    if (!data) return res.status(404).json({ error: 'Article not found' });
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update article' });
-  }
-}
+const getArticleBySlug = asyncHandler(async (req, res) => {
+  const data = await platformService.articles.getArticleBySlugPublic(req.params.slug);
+  if (!data) throw new AppError('Article not found', 404);
+  sendSuccess(res, data);
+});
 
-async function deleteArticle(req, res) {
-  try {
-    const ok = await platformService.articles.deleteArticle(req.params.id);
-    if (!ok) return res.status(404).json({ error: 'Article not found' });
-    res.status(204).send();
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete article' });
-  }
-}
+const getArticlesInternal = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '10', 10)));
+  const search = req.query.search ? String(req.query.search).trim() : undefined;
+  const sortBy = req.query.sortBy ? String(req.query.sortBy).trim() : undefined;
+  const sortOrder = (req.query.sortOrder && /^(ASC|DESC)$/i.test(req.query.sortOrder))
+    ? req.query.sortOrder.toUpperCase()
+    : 'DESC';
 
-async function getArticleCategories(req, res) {
-  try {
-    const data = await platformService.articleCategories.getArticleCategories();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch categories' });
-  }
-}
+  const result = await platformService.articles.getArticlesInternal({
+    status: req.query.status,
+    page,
+    limit,
+    search: search || undefined,
+    sortBy,
+    sortOrder,
+  });
 
-async function getArticleCategoriesInternal(req, res) {
-  try {
-    const data = await platformService.articleCategories.getArticleCategories();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch categories' });
-  }
-}
+  sendSuccess(res, result);
+});
 
-async function getTagsInternal(req, res) {
-  try {
-    const data = await platformService.tags.getTagsInternal();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch tags' });
-  }
-}
+const getArticleByIdInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.articles.getArticleByIdInternal(req.params.id);
+  if (!data) throw new AppError('Article not found', 404);
+  sendSuccess(res, data);
+});
 
-async function getArticleTypesInternal(req, res) {
-  try {
-    const data = await platformService.articleTypes.getArticleTypesInternal();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch article types' });
-  }
-}
+const createArticle = asyncHandler(async (req, res) => {
+  const data = await platformService.articles.createArticle(req.body);
+  sendCreated(res, data);
+});
 
-async function getCourtsInternal(req, res) {
-  try {
-    const data = await platformService.courts.getCourtsInternal();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch courts' });
-  }
-}
+const updateArticle = asyncHandler(async (req, res) => {
+  const data = await platformService.articles.updateArticle(req.params.id, req.body);
+  if (!data) throw new AppError('Article not found', 404);
+  sendSuccess(res, data);
+});
+
+const deleteArticle = asyncHandler(async (req, res) => {
+  const ok = await platformService.articles.deleteArticle(req.params.id);
+  if (!ok) throw new AppError('Article not found', 404);
+  sendNoContent(res);
+});
+
+// ── Lookups ────────────────────────────────────────────────────────
+
+const getArticleCategories = asyncHandler(async (req, res) => {
+  const data = await platformService.articleCategories.getArticleCategories();
+  sendSuccess(res, data);
+});
+
+const getArticleCategoriesInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.articleCategories.getArticleCategories();
+  sendSuccess(res, data);
+});
+
+const getTagsInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.tags.getTagsInternal();
+  sendSuccess(res, data);
+});
+
+const getArticleTypesInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.articleTypes.getArticleTypesInternal();
+  sendSuccess(res, data);
+});
+
+const getCourtsInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.courts.getCourtsInternal();
+  sendSuccess(res, data);
+});
+
+// ── CMS pages ───────────────────────────────────────────────────────
+
+const getCmsPageBySlug = asyncHandler(async (req, res) => {
+  const data = await platformService.cmsPages.getCmsPageBySlug(req.params.slug);
+  if (!data) throw new AppError('CMS page not found', 404);
+  sendSuccess(res, data);
+});
+
+const getCmsPagesInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.cmsPages.getCmsPagesInternal();
+  sendSuccess(res, data);
+});
+
+const getCmsPageBySlugInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.cmsPages.getCmsPageBySlug(req.params.slug);
+  if (!data) throw new AppError('CMS page not found', 404);
+  sendSuccess(res, data);
+});
+
+const putCmsPageBySlug = asyncHandler(async (req, res) => {
+  const data = await platformService.cmsPages.upsertCmsPageBySlug(req.params.slug, req.body);
+  sendSuccess(res, data);
+});
+
+const uploadImage = asyncHandler(async (req, res) => {
+  if (!req.file || !req.file.filename) throw new AppError('No file uploaded', 400);
+  const url = `/api/uploads/${req.file.filename}`;
+  sendSuccess(res, { url });
+});
 
 module.exports = {
   getHome,
@@ -405,4 +280,9 @@ module.exports = {
   getTagsInternal,
   getArticleTypesInternal,
   getCourtsInternal,
+  getCmsPageBySlug,
+  getCmsPagesInternal,
+  getCmsPageBySlugInternal,
+  putCmsPageBySlug,
+  uploadImage,
 };

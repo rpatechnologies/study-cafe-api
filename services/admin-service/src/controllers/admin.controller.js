@@ -1,182 +1,162 @@
-const { createCourseClient } = require('../clients/courseClient');
-const { createPlatformClient } = require('../clients/platformClient');
+const FormData = require('form-data');
+const courseClient = require('../clients/courseClient');
+const orderClient = require('../clients/orderClient');
+const platformClient = require('../clients/platformClient');
 const adminLogsService = require('../services/adminLogs.service');
 const paymentConfigService = require('../services/paymentConfig.service');
 const { getAdminId, getAdminRole } = require('../middleware');
+const { asyncHandler, AppError, sendSuccess, sendCreated, sendNoContent, sendPaginated } = require('../../../../shared');
 
-function proxyError(res, err, fallbackMessage = 'Service error') {
-  const status = err.response?.status || 500;
-  const body = err.response?.data || { error: fallbackMessage };
-  res.status(status).json(body);
-}
-
-async function me(req, res) {
+const me = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  if (!adminId) return res.status(401).json({ error: 'Unauthorized' });
-  res.json({ adminId, role: getAdminRole(req) });
-}
+  if (!adminId) throw new AppError('Unauthorized', 401);
+  sendSuccess(res, { adminId, role: getAdminRole(req) });
+});
 
-async function getPaymentConfigInternal(req, res) {
-  try {
-    const data = await paymentConfigService.getPaymentConfig();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch config' });
-  }
-}
+const getPaymentConfigInternal = asyncHandler(async (req, res) => {
+  const data = await paymentConfigService.getPaymentConfig();
+  sendSuccess(res, data);
+});
 
-async function getStats(req, res) {
-  try {
-    const data = await adminLogsService.getStats();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch stats' });
-  }
-}
+const getStats = asyncHandler(async (req, res) => {
+  const data = await adminLogsService.getStats();
+  sendSuccess(res, data);
+});
 
-async function updatePaymentConfig(req, res) {
+const updatePaymentConfig = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { razorpay_key_id, razorpay_key_secret } = req.body;
-    const result = await paymentConfigService.updatePaymentConfig({ razorpay_key_id, razorpay_key_secret });
-    await adminLogsService.logAction(adminId, 'UPDATE_PAYMENT_CONFIG', 'payment_config', '1', {}, req.ip);
-    res.json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update config' });
-  }
-}
+  const { razorpay_key_id, razorpay_key_secret } = req.body;
+  const result = await paymentConfigService.updatePaymentConfig({ razorpay_key_id, razorpay_key_secret });
+  await adminLogsService.logAction(adminId, 'UPDATE_PAYMENT_CONFIG', 'payment_config', '1', {}, req.ip);
+  sendSuccess(res, result);
+});
 
-async function getLogs(req, res) {
-  try {
-    const rows = await adminLogsService.getLogs(100);
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch logs' });
-  }
-}
+const getLogs = asyncHandler(async (req, res) => {
+  const rows = await adminLogsService.getLogs(100);
+  sendSuccess(res, rows);
+});
 
-async function createCourse(req, res) {
+// ── Course proxy handlers ──────────────────────────────────────────
+
+const createCourse = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().post('/internal/courses', req.body);
-    await adminLogsService.logAction(adminId, 'CREATE_COURSE', 'course', String(data.id), { title: data.title }, req.ip);
-    res.status(201).json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.post('/internal/courses', req.body);
+  await adminLogsService.logAction(adminId, 'CREATE_COURSE', 'course', String(data.id), { title: data.title }, req.ip);
+  sendCreated(res, data);
+});
 
-async function updateCourse(req, res) {
+const updateCourse = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().put(`/internal/courses/${req.params.id}`, req.body);
-    await adminLogsService.logAction(adminId, 'UPDATE_COURSE', 'course', req.params.id, {}, req.ip);
-    res.json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.put(`/internal/courses/${req.params.id}`, req.body);
+  await adminLogsService.logAction(adminId, 'UPDATE_COURSE', 'course', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
 
-async function createBatch(req, res) {
+const createBatch = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().post(`/internal/courses/${req.params.id}/batches`, req.body);
-    await adminLogsService.logAction(adminId, 'CREATE_BATCH', 'batch', String(data.id), { courseId: req.params.id }, req.ip);
-    res.status(201).json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.post(`/internal/courses/${req.params.id}/batches`, req.body);
+  await adminLogsService.logAction(adminId, 'CREATE_BATCH', 'batch', String(data.id), { courseId: req.params.id }, req.ip);
+  sendCreated(res, data);
+});
 
-async function updateBatch(req, res) {
+const updateBatch = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().put(`/internal/batches/${req.params.id}`, req.body);
-    await adminLogsService.logAction(adminId, 'UPDATE_BATCH', 'batch', req.params.id, {}, req.ip);
-    res.json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.put(`/internal/batches/${req.params.id}`, req.body);
+  await adminLogsService.logAction(adminId, 'UPDATE_BATCH', 'batch', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
 
-async function createSession(req, res) {
+const createSession = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().post(`/internal/batches/${req.params.id}/sessions`, req.body);
-    await adminLogsService.logAction(adminId, 'CREATE_SESSION', 'session', String(data.id), { batchId: req.params.id }, req.ip);
-    res.status(201).json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.post(`/internal/batches/${req.params.id}/sessions`, req.body);
+  await adminLogsService.logAction(adminId, 'CREATE_SESSION', 'session', String(data.id), { batchId: req.params.id }, req.ip);
+  sendCreated(res, data);
+});
 
-async function updateSession(req, res) {
+const updateSession = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().put(`/internal/sessions/${req.params.id}`, req.body);
-    await adminLogsService.logAction(adminId, 'UPDATE_SESSION', 'session', req.params.id, {}, req.ip);
-    res.json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.put(`/internal/sessions/${req.params.id}`, req.body);
+  await adminLogsService.logAction(adminId, 'UPDATE_SESSION', 'session', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
 
-async function addRecording(req, res) {
+const addRecording = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().post(`/internal/sessions/${req.params.id}/recordings`, req.body);
-    await adminLogsService.logAction(adminId, 'ADD_RECORDING', 'recording', String(data.id), { sessionId: req.params.id }, req.ip);
-    res.status(201).json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.post(`/internal/sessions/${req.params.id}/recordings`, req.body);
+  await adminLogsService.logAction(adminId, 'ADD_RECORDING', 'recording', String(data.id), { sessionId: req.params.id }, req.ip);
+  sendCreated(res, data);
+});
 
-async function addMaterial(req, res) {
+const addMaterial = asyncHandler(async (req, res) => {
   const adminId = getAdminId(req);
-  try {
-    const { data } = await createCourseClient().post(`/internal/courses/${req.params.id}/materials`, req.body);
-    await adminLogsService.logAction(adminId, 'ADD_MATERIAL', 'material', String(data.id), { courseId: req.params.id }, req.ip);
-    res.status(201).json(data);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+  const { data } = await courseClient.post(`/internal/courses/${req.params.id}/materials`, req.body);
+  await adminLogsService.logAction(adminId, 'ADD_MATERIAL', 'material', String(data.id), { courseId: req.params.id }, req.ip);
+  sendCreated(res, data);
+});
 
-async function getCourses(req, res) {
-  try {
-    const { data } = await createCourseClient().get('/internal/courses');
-    res.json(Array.isArray(data) ? data : data || []);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+const getCourses = asyncHandler(async (req, res) => {
+  const { data } = await courseClient.get('/internal/courses');
+  sendSuccess(res, Array.isArray(data) ? data : data || []);
+});
 
-async function getCourseCats(req, res) {
-  try {
-    const { data } = await createCourseClient().get('/internal/course-cats');
-    res.json(Array.isArray(data) ? data : data || []);
-  } catch (err) {
-    proxyError(res, err, 'Course service error');
-  }
-}
+const getCourse = asyncHandler(async (req, res) => {
+  const { data } = await courseClient.get(`/internal/courses/${req.params.id}`);
+  sendSuccess(res, data);
+});
+
+const getCourseSessions = asyncHandler(async (req, res) => {
+  const { data } = await courseClient.get(`/internal/courses/${req.params.id}/sessions`);
+  sendSuccess(res, data);
+});
+
+const updateRecording = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.put(`/internal/recordings/${req.params.id}`, req.body);
+  await adminLogsService.logAction(adminId, 'UPDATE_RECORDING', 'recording', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
+
+const getCourseCats = asyncHandler(async (req, res) => {
+  const { data } = await courseClient.get('/internal/course-cats');
+  sendSuccess(res, Array.isArray(data) ? data : data || []);
+});
+
+const getCoursePageSettings = asyncHandler(async (req, res) => {
+  const { data } = await courseClient.get('/internal/course-page-settings');
+  sendSuccess(res, data);
+});
+
+const updateCoursePageSetting = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.put(`/internal/course-page-settings/${req.params.key}`, req.body);
+  await adminLogsService.logAction(adminId, 'UPDATE_COURSE_PAGE_SETTING', 'course_page_setting', req.params.key, {}, req.ip);
+  sendSuccess(res, data);
+});
+
+const getOrders = asyncHandler(async (req, res) => {
+  const limit = req.query.limit || 100;
+  const offset = req.query.offset || 0;
+  const { data } = await orderClient.get('/internal/orders', { params: { limit, offset } });
+  sendSuccess(res, Array.isArray(data) ? data : data || []);
+});
+
+const getOrderByOrderId = asyncHandler(async (req, res) => {
+  const { data } = await orderClient.get(`/internal/orders/${encodeURIComponent(req.params.orderId)}`);
+  sendSuccess(res, data);
+});
+
+// ── Platform proxy handlers ────────────────────────────────────────
 
 function platformProxy(handler) {
-  return async (req, res) => {
-    try {
-      const client = createPlatformClient();
-      const result = await handler(client, req);
-      if (result.status === 204) return res.status(204).send();
-      if (result.status === 201) return res.status(201).json(result.data);
-      res.json(result.data);
-    } catch (err) {
-      proxyError(res, err, 'Platform service error');
+  return asyncHandler(async (req, res) => {
+    const result = await handler(platformClient, req);
+    if (result.status === 204) return sendNoContent(res);
+    if (result.status === 201) return sendCreated(res, result.data);
+    if (result.data && typeof result.data === 'object' && 'meta' in result.data) {
+      return sendPaginated(res, result.data);
     }
-  };
+    sendSuccess(res, result.data);
+  });
 }
 
 const platform = {
@@ -205,7 +185,22 @@ const platform = {
   getTags: platformProxy((c) => c.get('/internal/platform/tags').then((r) => ({ data: r.data }))),
   getArticleTypes: platformProxy((c) => c.get('/internal/platform/article-types').then((r) => ({ data: r.data }))),
   getCourts: platformProxy((c) => c.get('/internal/platform/courts').then((r) => ({ data: r.data }))),
+  getCmsPages: platformProxy((c) => c.get('/internal/platform/cms-pages').then((r) => ({ data: r.data }))),
+  getCmsPageBySlug: platformProxy((c, req) => c.get(`/internal/platform/cms-pages/${req.params.slug}`).then((r) => ({ data: r.data }))),
+  putCmsPage: platformProxy((c, req) => c.put(`/internal/platform/cms-pages/${req.params.slug}`, req.body).then((r) => ({ data: r.data }))),
 };
+
+const uploadImage = asyncHandler(async (req, res) => {
+  if (!req.file || !req.file.buffer) throw new AppError('No file uploaded', 400);
+  const form = new FormData();
+  form.append('file', req.file.buffer, { filename: req.file.originalname || 'image.jpg' });
+  const { data } = await platformClient.post('/internal/platform/upload/image', form, {
+    headers: form.getHeaders(),
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+  });
+  sendSuccess(res, data);
+});
 
 module.exports = {
   me,
@@ -220,8 +215,16 @@ module.exports = {
   createSession,
   updateSession,
   addRecording,
+  updateRecording,
   addMaterial,
   getCourses,
+  getCourse,
+  getCourseSessions,
   getCourseCats,
+  getCoursePageSettings,
+  updateCoursePageSetting,
+  getOrders,
+  getOrderByOrderId,
   platform,
+  uploadImage,
 };

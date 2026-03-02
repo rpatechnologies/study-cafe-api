@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
+const { logger } = require('../../../shared');
 const routes = require('./routes');
 const { errorHandler } = require('./middleware');
 
@@ -8,7 +8,7 @@ function createApp() {
   const app = express();
   app.use(cors());
   app.use(express.json());
-  app.use(morgan('combined'));
+  app.use(logger.requestLogger);
   app.use(routes);
   app.use(errorHandler);
   return app;

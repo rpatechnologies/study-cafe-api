@@ -1,6 +1,9 @@
 const { Op } = require('sequelize');
+const { QueryTypes } = require('sequelize');
 const { paginate } = require('../../../../shared');
 const {
+  sequelize,
+  CmsPage,
   HomeSection,
   State,
   Testimonial,
@@ -18,6 +21,30 @@ const {
   ArticleType,
   Court,
 } = require('../models');
+
+/** Get display_name for one author from users table (same DB). */
+async function getAuthorDisplayName(authorId) {
+  if (authorId == null) return null;
+  const rows = await sequelize.query(
+    'SELECT display_name FROM users WHERE id = ? LIMIT 1',
+    { replacements: [authorId], type: QueryTypes.SELECT }
+  );
+  const name = rows[0] && (rows[0].display_name != null && rows[0].display_name !== '') ? rows[0].display_name : null;
+  return name;
+}
+
+/** Get display_name for many author ids; returns Map<authorId, display_name>. */
+async function getAuthorDisplayNamesBatch(authorIds) {
+  const uniq = [...new Set(authorIds)].filter((id) => id != null);
+  if (uniq.length === 0) return new Map();
+  const rows = await sequelize.query(
+    'SELECT id, display_name FROM users WHERE id IN (?)',
+    { replacements: [uniq], type: QueryTypes.SELECT }
+  );
+  const map = new Map();
+  rows.forEach((r) => { map.set(Number(r.id), r.display_name || null); });
+  return map;
+}
 
 function toPlain(row) {
   return row ? row.get({ plain: true }) : null;
@@ -334,10 +361,14 @@ async function getArticlesPublic(limit, offset) {
     offset,
     attributes: ['id', 'title', 'slug', 'excerpt', 'thumbnail_url', 'author_id', 'published_at', 'created_at'],
   });
-  return rows.map((r) => {
-    const p = r.get({ plain: true });
-    return { ...p, cover_image_url: p.thumbnail_url, author_name: p.author_id };
-  });
+  const list = rows.map((r) => r.get({ plain: true }));
+  const authorIds = list.map((p) => p.author_id).filter(Boolean);
+  const authorNames = await getAuthorDisplayNamesBatch(authorIds);
+  return list.map((p) => ({
+    ...p,
+    cover_image_url: p.thumbnail_url,
+    author_name: authorNames.get(p.author_id) ?? p.author_id,
+  }));
 }
 
 function extractRelatedIds(content) {
@@ -352,16 +383,37 @@ function extractRelatedIds(content) {
   return ids;
 }
 
-async function resolveRelatedArticles(ids) {
-  if (!Array.isArray(ids) || ids.length === 0) return [];
+/**
+ * Replace [related id="N"] shortcodes in the article body with inline HTML links.
+ * Resolves WP post IDs to article slugs and renders "Also Read" styled links.
+ */
+async function embedRelatedArticles(content) {
+  if (typeof content !== 'string' || !content.length) return content;
+  const relatedIds = extractRelatedIds(content);
+  if (!relatedIds.length) return content;
+
+  // Fetch all referenced articles in one query
   const rows = await Article.findAll({
-    where: { id: ids },
-    attributes: ['id', 'title', 'slug'],
+    where: { [Op.or]: [{ wp_post_id: relatedIds }, { id: relatedIds }] },
+    attributes: ['id', 'wp_post_id', 'title', 'slug', 'thumbnail_url'],
   });
-  return rows.map((r) => {
+  const byWpId = new Map();
+  const byId = new Map();
+  rows.forEach((r) => {
     const p = r.get({ plain: true });
-    return { id: p.id, title: p.title || '', slug: p.slug || '' };
+    if (p.wp_post_id != null) byWpId.set(Number(p.wp_post_id), p);
+    byId.set(Number(p.id), p);
   });
+
+  // Replace each [related id="N"] shortcode with an HTML block
+  const replaced = content.replace(/\[related\s+id="(\d+)"\]/gi, (match, rawId) => {
+    const n = Number(rawId);
+    const article = byWpId.get(n) || byId.get(n);
+    if (!article) return ''; // remove unresolvable shortcodes
+    const href = `/articles/${article.slug}`;
+    return `<div class="related-article-inline"><span class="related-label">Also Read:</span> <a href="${href}" class="related-link">${article.title}</a></div>`;
+  });
+  return replaced;
 }
 
 async function getArticleBySlugPublic(slug) {
@@ -370,13 +422,21 @@ async function getArticleBySlugPublic(slug) {
     attributes: [
       'id', 'title', 'slug', 'excerpt', 'content', 'thumbnail_url', 'author_id',
       'published_at', 'meta_title', 'meta_description', 'created_at', 'updated_at',
+      'rel_download_url', 'upload_url',
     ],
   });
   if (!row) return null;
   const p = row.get({ plain: true });
-  const out = { ...p, body: p.content, cover_image_url: p.thumbnail_url, author_name: p.author_id };
-  const relatedIds = extractRelatedIds(p.content);
-  if (relatedIds.length) out.related_articles = await resolveRelatedArticles(relatedIds);
+  const authorName = await getAuthorDisplayName(p.author_id);
+  const body = await embedRelatedArticles(p.content);
+  const out = {
+    ...p,
+    body,
+    cover_image_url: p.thumbnail_url,
+    author_name: authorName ?? p.author_id,
+    // Single download URL for "Download File" button: prefer rel_download_url, else upload_url
+    download_url: p.rel_download_url || p.upload_url || null,
+  };
   return out;
 }
 
@@ -427,6 +487,15 @@ async function getArticlesInternal(options = {}) {
     attributes: ARTICLE_LIST_ATTRS,
   });
 
+  if (result.data && result.data.length > 0) {
+    const authorIds = result.data.map((r) => r.author_id).filter(Boolean);
+    const authorNames = await getAuthorDisplayNamesBatch(authorIds);
+    result.data = result.data.map((r) => ({
+      ...r,
+      author_name: authorNames.get(r.author_id) ?? r.author_id,
+    }));
+  }
+
   return result;
 }
 
@@ -434,19 +503,56 @@ async function getArticleByIdInternal(id) {
   const row = await Article.findByPk(id);
   if (!row) return null;
   const p = row.get({ plain: true });
-  const [catRows, tagRows, typeRows, courtRows, relatedArticles] = await Promise.all([
+
+  // Resolve related article shortcodes for admin display
+  const relatedIds = extractRelatedIds(p.content);
+  const relatedRows = relatedIds.length
+    ? await Article.findAll({
+      where: { [Op.or]: [{ wp_post_id: relatedIds }, { id: relatedIds }] },
+      attributes: ['id', 'wp_post_id', 'title', 'slug'],
+    })
+    : [];
+  const byWpId = new Map();
+  const byId = new Map();
+  relatedRows.forEach((r) => {
+    const rp = r.get({ plain: true });
+    if (rp.wp_post_id != null) byWpId.set(Number(rp.wp_post_id), rp);
+    byId.set(Number(rp.id), rp);
+  });
+  const relatedArticles = [];
+  const seen = new Set();
+  for (const rid of relatedIds) {
+    const n = Number(rid);
+    const match = byWpId.get(n) || byId.get(n);
+    if (match && !seen.has(match.id)) {
+      seen.add(match.id);
+      relatedArticles.push({ id: match.id, title: match.title || '', slug: match.slug || '' });
+    }
+  }
+
+  const [catRows, tagRows, typeRows, courtRows, authorName] = await Promise.all([
     ArticleCategoryMap.findAll({ where: { article_id: id }, attributes: ['category_id'] }),
     ArticleTagMap.findAll({ where: { article_id: id }, attributes: ['tag_id'] }),
     ArticleTypeMap.findAll({ where: { article_id: id }, attributes: ['article_type_id'] }),
     ArticleCourtMap.findAll({ where: { article_id: id }, attributes: ['court_id'] }),
-    resolveRelatedArticles(extractRelatedIds(p.content)),
+    getAuthorDisplayName(p.author_id),
   ]);
+  const tagIds = tagRows.map((r) => Number(r.tag_id));
+  const tagRecords = tagIds.length
+    ? await Tag.findAll({ where: { id: tagIds }, attributes: ['id', 'name'] })
+    : [];
+  const tagNameById = new Map(tagRecords.map((r) => [Number(r.id), r.name || '']));
+  // Single tags array { id, name } so client doesn't need to zip two arrays
+  const tags = tagIds.map((id) => ({ id, name: tagNameById.get(id) ?? '' }));
+
   const result = {
     ...p,
     category_ids: catRows.map((r) => Number(r.category_id)),
-    tag_ids: tagRows.map((r) => Number(r.tag_id)),
+    tag_ids: tagIds,
+    tags,
     article_type_ids: typeRows.map((r) => Number(r.article_type_id)),
     court_ids: courtRows.map((r) => Number(r.court_id)),
+    author_name: authorName ?? p.author_id,
   };
   if (relatedArticles.length) result.related_articles = relatedArticles;
   return result;
@@ -607,4 +713,41 @@ module.exports = {
   tags: { getTagsInternal },
   articleTypes: { getArticleTypesInternal },
   courts: { getCourtsInternal },
+  cmsPages: {
+    getCmsPagesInternal,
+    getCmsPageBySlug,
+    upsertCmsPageBySlug,
+  },
 };
+
+// ── CMS pages ───────────────────────────────────────────────────────
+
+async function getCmsPagesInternal() {
+  const rows = await CmsPage.findAll({ order: [['slug', 'ASC']] });
+  return rows.map((r) => r.get({ plain: true }));
+}
+
+async function getCmsPageBySlug(slug) {
+  const row = await CmsPage.findOne({ where: { slug } });
+  return row ? row.get({ plain: true }) : null;
+}
+
+async function upsertCmsPageBySlug(slug, data) {
+  const { title, content, meta } = data;
+  const [row, created] = await CmsPage.findOrCreate({
+    where: { slug },
+    defaults: {
+      title: title ?? null,
+      content: content ?? null,
+      meta: meta || null,
+    },
+  });
+  if (!created) {
+    await row.update({
+      ...(title !== undefined && { title }),
+      ...(content !== undefined && { content }),
+      ...(meta !== undefined && { meta }),
+    });
+  }
+  return row.get({ plain: true });
+}

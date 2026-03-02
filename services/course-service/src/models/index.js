@@ -32,6 +32,7 @@ const CourseCat = require('./CourseCat')(sequelize);
 const CourseCategory = require('./CourseCategory')(sequelize);
 const CourseAuthor = require('./CourseAuthor')(sequelize);
 const Enrollment = require('./Enrollment')(sequelize);
+const CoursePageSetting = require('./CoursePageSetting')(sequelize);
 
 Course.associate({ Batch, Material, CourseCat, CourseCategory, CourseAuthor, Enrollment });
 Batch.associate({ Course, Session });
@@ -39,7 +40,7 @@ Session.associate({ Batch, Recording });
 Recording.associate({ Session });
 Material.associate({ Course });
 
-const models = { Course, Batch, Session, Recording, Material, CourseCat, CourseCategory, CourseAuthor, Enrollment };
+const models = { Course, Batch, Session, Recording, Material, CourseCat, CourseCategory, CourseAuthor, Enrollment, CoursePageSetting };
 
 async function connect() {
   try {

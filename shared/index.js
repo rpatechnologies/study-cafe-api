@@ -1,8 +1,8 @@
 /**
  * Shared Utilities — Single entry point.
- * 
+ *
  * Usage from any service:
- *   const { logger, AppError, asyncHandler, errorHandler, createCrudController } = require('../../shared');
+ *   const { logger, AppError, asyncHandler, errorHandler, validate, sendSuccess, ... } = require('../../shared');
  */
 
 const { logger } = require('./logger');
@@ -11,6 +11,8 @@ const { asyncHandler } = require('./asyncHandler');
 const { errorHandler } = require('./errorHandler');
 const { createCrudController } = require('./baseController');
 const { paginate } = require('./pagination/paginate');
+const { validate } = require('./validate');
+const { sendSuccess, sendCreated, sendNoContent, sendPaginated } = require('./responseHelper');
 
 module.exports = {
     logger,
@@ -19,4 +21,9 @@ module.exports = {
     errorHandler,
     createCrudController,
     paginate,
+    validate,
+    sendSuccess,
+    sendCreated,
+    sendNoContent,
+    sendPaginated,
 };

@@ -1,5 +1,6 @@
 const controller = require('../controllers/admin.controller');
 const { requireAdmin, internalAuth } = require('../middleware');
+const { uploadImage: uploadImageMw } = require('../middleware/upload');
 
 function register(router) {
   router.get('/admin/me', requireAdmin, controller.me);
@@ -9,7 +10,11 @@ function register(router) {
   router.get('/admin/logs', requireAdmin, controller.getLogs);
 
   router.get('/admin/courses', requireAdmin, controller.getCourses);
+  router.get('/admin/courses/:id', requireAdmin, controller.getCourse);
+  router.get('/admin/courses/:id/sessions', requireAdmin, controller.getCourseSessions);
   router.get('/admin/course-cats', requireAdmin, controller.getCourseCats);
+  router.get('/admin/orders', requireAdmin, controller.getOrders);
+  router.get('/admin/orders/:orderId', requireAdmin, controller.getOrderByOrderId);
   router.post('/admin/courses', requireAdmin, controller.createCourse);
   router.put('/admin/courses/:id', requireAdmin, controller.updateCourse);
   router.post('/admin/courses/:id/batches', requireAdmin, controller.createBatch);
@@ -17,7 +22,10 @@ function register(router) {
   router.post('/admin/batches/:id/sessions', requireAdmin, controller.createSession);
   router.put('/admin/sessions/:id', requireAdmin, controller.updateSession);
   router.post('/admin/sessions/:id/recordings', requireAdmin, controller.addRecording);
+  router.put('/admin/recordings/:id', requireAdmin, controller.updateRecording);
   router.post('/admin/courses/:id/materials', requireAdmin, controller.addMaterial);
+  router.get('/admin/course-page-settings', requireAdmin, controller.getCoursePageSettings);
+  router.put('/admin/course-page-settings/:key', requireAdmin, controller.updateCoursePageSetting);
 
   const p = controller.platform;
   router.get('/admin/platform/home', requireAdmin, p.getHome);
@@ -45,6 +53,10 @@ function register(router) {
   router.get('/admin/platform/tags', requireAdmin, p.getTags);
   router.get('/admin/platform/article-types', requireAdmin, p.getArticleTypes);
   router.get('/admin/platform/courts', requireAdmin, p.getCourts);
+  router.get('/admin/platform/cms-pages', requireAdmin, p.getCmsPages);
+  router.get('/admin/platform/cms-pages/:slug', requireAdmin, p.getCmsPageBySlug);
+  router.put('/admin/platform/cms-pages/:slug', requireAdmin, p.putCmsPage);
+  router.post('/admin/upload', requireAdmin, uploadImageMw, controller.uploadImage);
 }
 
 module.exports = { register };
