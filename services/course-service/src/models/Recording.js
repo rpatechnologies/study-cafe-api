@@ -8,6 +8,7 @@ module.exports = (sequelize) => {
       session_id: { type: DataTypes.INTEGER, allowNull: false },
       url: { type: DataTypes.STRING(512), allowNull: false, defaultValue: '' },
       source: { type: DataTypes.STRING(255), allowNull: true },
+      is_visible: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     },
     {
       tableName: 'recordings',

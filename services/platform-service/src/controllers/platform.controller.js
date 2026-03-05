@@ -245,6 +245,77 @@ const uploadImage = asyncHandler(async (req, res) => {
   sendSuccess(res, { url });
 });
 
+// ── FAQs ───────────────────────────────────────────────────────────
+
+const getFaqs = asyncHandler(async (req, res) => {
+  const data = await platformService.faqs.getFaqsPublic();
+  sendSuccess(res, data);
+});
+
+const getFaqsInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.faqs.getFaqsInternal();
+  sendSuccess(res, data);
+});
+
+const getFaqInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.faqs.getFaqByIdInternal(req.params.id);
+  if (!data) throw new AppError('Faq not found', 404);
+  sendSuccess(res, data);
+});
+
+const createFaq = asyncHandler(async (req, res) => {
+  const data = await platformService.faqs.createFaq(req.body);
+  sendCreated(res, data);
+});
+
+const updateFaq = asyncHandler(async (req, res) => {
+  const data = await platformService.faqs.updateFaq(req.params.id, req.body);
+  if (!data) throw new AppError('Faq not found', 404);
+  sendSuccess(res, data);
+});
+
+const deleteFaq = asyncHandler(async (req, res) => {
+  const ok = await platformService.faqs.deleteFaq(req.params.id);
+  if (!ok) throw new AppError('Faq not found', 404);
+  sendNoContent(res);
+});
+
+// ── SEO Metadata ───────────────────────────────────────────────────
+
+const getSeoMetadataInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.seo.getSeoMetadataInternal();
+  sendSuccess(res, data);
+});
+
+const getSeoMetadataByIdInternal = asyncHandler(async (req, res) => {
+  const data = await platformService.seo.getSeoMetadataByIdInternal(req.params.id);
+  if (!data) throw new AppError('SEO Metadata not found', 404);
+  sendSuccess(res, data);
+});
+
+const getSeoMetadataBySlugPublic = asyncHandler(async (req, res) => {
+  const data = await platformService.seo.getSeoMetadataBySlugPublic(req.params.slug);
+  if (!data) throw new AppError('SEO Metadata not found', 404);
+  sendSuccess(res, data);
+});
+
+const createSeoMetadata = asyncHandler(async (req, res) => {
+  const data = await platformService.seo.createSeoMetadata(req.body);
+  sendCreated(res, data);
+});
+
+const updateSeoMetadata = asyncHandler(async (req, res) => {
+  const data = await platformService.seo.updateSeoMetadata(req.params.id, req.body);
+  if (!data) throw new AppError('SEO Metadata not found', 404);
+  sendSuccess(res, data);
+});
+
+const deleteSeoMetadata = asyncHandler(async (req, res) => {
+  const ok = await platformService.seo.deleteSeoMetadata(req.params.id);
+  if (!ok) throw new AppError('SEO Metadata not found', 404);
+  sendNoContent(res);
+});
+
 module.exports = {
   getHome,
   getHomeSectionsInternal,
@@ -258,6 +329,18 @@ module.exports = {
   createTestimonial,
   updateTestimonial,
   deleteTestimonial,
+  getFaqs,
+  getFaqsInternal,
+  getFaqInternal,
+  createFaq,
+  updateFaq,
+  deleteFaq,
+  getSeoMetadataInternal,
+  getSeoMetadataByIdInternal,
+  getSeoMetadataBySlugPublic,
+  createSeoMetadata,
+  updateSeoMetadata,
+  deleteSeoMetadata,
   getFooter,
   getFooterInternal,
   upsertFooter,

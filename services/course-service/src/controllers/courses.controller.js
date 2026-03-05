@@ -42,7 +42,8 @@ const updateCourse = asyncHandler(async (req, res) => {
 });
 
 const createBatch = asyncHandler(async (req, res) => {
-  const batch = await coursesService.createBatch(req.params.id, req.body);
+  const batch = await coursesService.createBatchFromCurriculum(req.params.id, req.body);
+  if (!batch) throw new AppError('Course not found', 404);
   sendCreated(res, batch);
 });
 
@@ -108,6 +109,56 @@ const updatePageSetting = asyncHandler(async (req, res) => {
   sendSuccess(res, result);
 });
 
+const toggleRecordingVisibility = asyncHandler(async (req, res) => {
+  const { is_visible } = req.body;
+  const recording = await coursesService.toggleRecordingVisibility(req.params.id, is_visible);
+  if (!recording) throw new AppError('Recording not found', 404);
+  sendSuccess(res, recording);
+});
+
+const deleteRecording = asyncHandler(async (req, res) => {
+  const ok = await coursesService.deleteRecording(req.params.id);
+  if (!ok) throw new AppError('Recording not found', 404);
+  sendSuccess(res, { deleted: true });
+});
+
+const deleteSession = asyncHandler(async (req, res) => {
+  const ok = await coursesService.deleteSession(req.params.id);
+  if (!ok) throw new AppError('Session not found', 404);
+  sendSuccess(res, { deleted: true });
+});
+
+const deleteBatch = asyncHandler(async (req, res) => {
+  const ok = await coursesService.deleteBatch(req.params.id);
+  if (!ok) throw new AppError('Batch not found', 404);
+  sendSuccess(res, { deleted: true });
+});
+
+const getBatchEnrollments = asyncHandler(async (req, res) => {
+  const rows = await coursesService.getBatchEnrollments(req.params.id);
+  sendSuccess(res, rows);
+});
+
+const addBatchEnrollment = asyncHandler(async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) throw new AppError('user_id is required', 400);
+  const result = await coursesService.addBatchEnrollment(req.params.id, user_id);
+  sendCreated(res, result);
+});
+
+const autoEnrollBatch = asyncHandler(async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) throw new AppError('user_id is required', 400);
+  const result = await coursesService.autoEnrollInBatch(req.params.id, user_id);
+  sendSuccess(res, result || { message: 'No active batch found' });
+});
+
+const removeBatchEnrollment = asyncHandler(async (req, res) => {
+  const ok = await coursesService.removeBatchEnrollment(req.params.id);
+  if (!ok) throw new AppError('Enrollment not found', 404);
+  sendSuccess(res, { deleted: true });
+});
+
 module.exports = {
   list,
   getById,
@@ -122,6 +173,14 @@ module.exports = {
   updateSession,
   addRecording,
   updateRecording,
+  toggleRecordingVisibility,
+  deleteRecording,
+  deleteSession,
+  deleteBatch,
+  getBatchEnrollments,
+  addBatchEnrollment,
+  removeBatchEnrollment,
+  autoEnrollBatch,
   addMaterial,
   listAllInternal,
   listCourseCatsInternal,

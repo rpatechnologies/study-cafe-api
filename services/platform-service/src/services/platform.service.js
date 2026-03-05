@@ -11,6 +11,7 @@ const {
   PremiumPlan,
   PlanCourse,
   PlanCourseCategory,
+  Faq,
   Article,
   ArticleCategoryMap,
   ArticleTagMap,
@@ -144,16 +145,29 @@ async function updateState(id, data) {
 
 async function getTestimonialsPublic(featuredOnly) {
   const where = { is_active: true };
-  if (featuredOnly) where.is_featured = true;
   const rows = await Testimonial.findAll({
     where,
     order: [
       ['sort_order', 'ASC'],
       ['id', 'DESC'],
     ],
-    attributes: ['id', 'author_name', 'author_role', 'content', 'avatar_url', 'rating', 'sort_order'],
+    attributes: ['id', 'name', 'role', 'quote', 'avatar_url', 'sort_order'],
   });
-  return rows.map((r) => r.get({ plain: true }));
+  return rows.map(toApi) ;
+}
+
+function toApi(r) {
+  const plain = r.get ? r.get({ plain: true }) : r;
+  return {
+    id: plain.id,
+    author_name: plain.name,
+    author_role: plain.role,
+    content: plain.quote,
+    avatar_url: plain.avatar_url,
+    sort_order: plain.sort_order,
+    is_active: plain.is_active,
+    created_at: plain.created_at,
+  };
 }
 
 async function getTestimonialsInternal() {
@@ -163,37 +177,33 @@ async function getTestimonialsInternal() {
       ['id', 'DESC'],
     ],
   });
-  return rows.map((r) => r.get({ plain: true }));
+  return rows.map(toApi);
 }
 
 async function createTestimonial(data) {
   const row = await Testimonial.create({
-    author_name: data.author_name || '',
-    author_role: data.author_role || null,
-    content: data.content || '',
+    name: data.author_name || '',
+    role: data.author_role || null,
+    quote: data.content || '',
     avatar_url: data.avatar_url || null,
-    rating: data.rating ?? null,
-    is_featured: !!data.is_featured,
     sort_order: data.sort_order ?? 0,
     is_active: data.is_active !== undefined ? !!data.is_active : true,
   });
-  return row.get({ plain: true });
+  return toApi(row);
 }
 
 async function updateTestimonial(id, data) {
   const row = await Testimonial.findByPk(id);
   if (!row) return null;
-  await row.update({
-    ...(data.author_name !== undefined && { author_name: data.author_name }),
-    ...(data.author_role !== undefined && { author_role: data.author_role }),
-    ...(data.content !== undefined && { content: data.content }),
-    ...(data.avatar_url !== undefined && { avatar_url: data.avatar_url }),
-    ...(data.rating !== undefined && { rating: data.rating }),
-    ...(data.is_featured !== undefined && { is_featured: !!data.is_featured }),
-    ...(data.sort_order !== undefined && { sort_order: data.sort_order }),
-    ...(data.is_active !== undefined && { is_active: !!data.is_active }),
-  });
-  return row.get({ plain: true });
+  const updates = {};
+  if (data.author_name !== undefined) updates.name = data.author_name;
+  if (data.author_role !== undefined) updates.role = data.author_role;
+  if (data.content !== undefined) updates.quote = data.content;
+  if (data.avatar_url !== undefined) updates.avatar_url = data.avatar_url;
+  if (data.sort_order !== undefined) updates.sort_order = data.sort_order;
+  if (data.is_active !== undefined) updates.is_active = !!data.is_active;
+  await row.update(updates);
+  return toApi(row);
 }
 
 async function deleteTestimonial(id) {
@@ -665,6 +675,110 @@ async function getCourtsInternal() {
   return rows.map((r) => r.get({ plain: true }));
 }
 
+async function getFaqsPublic() {
+  const rows = await Faq.findAll({
+    where: { is_active: true },
+    order: [['sort_order', 'ASC'], ['id', 'DESC']],
+    attributes: ['id', 'question', 'answer', 'sort_order'],
+  });
+  return rows.map((r) => r.get({ plain: true }));
+}
+
+async function getFaqsInternal() {
+  const rows = await Faq.findAll({
+    order: [['sort_order', 'ASC'], ['id', 'DESC']],
+  });
+  return rows.map((r) => r.get({ plain: true }));
+}
+
+async function getFaqByIdInternal(id) {
+  const row = await Faq.findByPk(id);
+  return row ? row.get({ plain: true }) : null;
+}
+
+async function createFaq(data) {
+  const row = await Faq.create({
+    question: data.question || '',
+    answer: data.answer || '',
+    sort_order: data.sort_order ?? 0,
+    is_active: data.is_active !== undefined ? !!data.is_active : true,
+  });
+  return row.get({ plain: true });
+}
+
+async function updateFaq(id, data) {
+  const row = await Faq.findByPk(id);
+  if (!row) return null;
+  await row.update({
+    ...(data.question !== undefined && { question: data.question }),
+    ...(data.answer !== undefined && { answer: data.answer }),
+    ...(data.sort_order !== undefined && { sort_order: data.sort_order }),
+    ...(data.is_active !== undefined && { is_active: !!data.is_active }),
+  });
+  return row.get({ plain: true });
+}
+
+async function deleteFaq(id) {
+  const deleted = await Faq.destroy({ where: { id } });
+  return deleted > 0;
+}
+
+// ── SEO Metadata ───────────────────────────────────────────────────
+
+async function getSeoMetadataInternal() {
+  const rows = await SeoMetadata.findAll({ order: [['id', 'DESC']] });
+  return rows.map((r) => r.get({ plain: true }));
+}
+
+async function getSeoMetadataByIdInternal(id) {
+  const row = await SeoMetadata.findByPk(id);
+  return row ? row.get({ plain: true }) : null;
+}
+
+async function getSeoMetadataBySlugPublic(slug) {
+  const row = await SeoMetadata.findOne({ where: { page_slug: slug } });
+  return row ? row.get({ plain: true }) : null;
+}
+
+async function createSeoMetadata(data) {
+  const row = await SeoMetadata.create({
+    page_name: data.page_name,
+    page_slug: data.page_slug,
+    meta_title: data.meta_title,
+    meta_description: data.meta_description || null,
+    meta_keywords: data.meta_keywords || null,
+    canonical_url: data.canonical_url || null,
+    og_title: data.og_title || null,
+    og_description: data.og_description || null,
+    og_image_url: data.og_image_url || null,
+    robots: data.robots || 'index, follow',
+  });
+  return row.get({ plain: true });
+}
+
+async function updateSeoMetadata(id, data) {
+  const row = await SeoMetadata.findByPk(id);
+  if (!row) return null;
+  await row.update({
+    ...(data.page_name !== undefined && { page_name: data.page_name }),
+    ...(data.page_slug !== undefined && { page_slug: data.page_slug }),
+    ...(data.meta_title !== undefined && { meta_title: data.meta_title }),
+    ...(data.meta_description !== undefined && { meta_description: data.meta_description }),
+    ...(data.meta_keywords !== undefined && { meta_keywords: data.meta_keywords }),
+    ...(data.canonical_url !== undefined && { canonical_url: data.canonical_url }),
+    ...(data.og_title !== undefined && { og_title: data.og_title }),
+    ...(data.og_description !== undefined && { og_description: data.og_description }),
+    ...(data.og_image_url !== undefined && { og_image_url: data.og_image_url }),
+    ...(data.robots !== undefined && { robots: data.robots }),
+  });
+  return row.get({ plain: true });
+}
+
+async function deleteSeoMetadata(id) {
+  const deleted = await SeoMetadata.destroy({ where: { id } });
+  return deleted > 0;
+}
+
 module.exports = {
   home: {
     getHomePublic,
@@ -683,6 +797,22 @@ module.exports = {
     createTestimonial,
     updateTestimonial,
     deleteTestimonial,
+  },
+  faqs: {
+    getFaqsPublic,
+    getFaqsInternal,
+    getFaqByIdInternal,
+    createFaq,
+    updateFaq,
+    deleteFaq,
+  },
+  seo: {
+    getSeoMetadataInternal,
+    getSeoMetadataByIdInternal,
+    getSeoMetadataBySlugPublic,
+    createSeoMetadata,
+    updateSeoMetadata,
+    deleteSeoMetadata,
   },
   footer: {
     getFooterPublic,

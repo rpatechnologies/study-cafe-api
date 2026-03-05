@@ -7,7 +7,11 @@ const { errorHandler } = require('./middleware');
 function createApp() {
   const app = express();
   app.use(cors());
-  app.use(express.json());
+  app.use((req, res, next) => {
+    // Skip JSON body parsing for multipart requests (file uploads) — let multer handle them
+    if (req.headers['content-type']?.startsWith('multipart/form-data')) return next();
+    express.json()(req, res, next);
+  });
   app.use(logger.requestLogger);
   app.use(routes);
   app.use(errorHandler);

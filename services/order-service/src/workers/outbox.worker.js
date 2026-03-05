@@ -16,15 +16,27 @@ async function processEvent(record) {
   const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
   try {
     if (event_type === 'COURSE_PURCHASED') {
-      await axios.post(
-        `${config.authServiceUrl}/access/grant-course`,
-        {
-          userId: data.userId,
-          courseId: data.courseId,
-          orderId: data.orderId,
-        },
-        { headers: { 'X-Internal-API-Key': config.internalApiKey }, timeout: 10000 }
-      );
+      await Promise.all([
+        axios.post(
+          `${config.authServiceUrl}/access/grant-course`,
+          {
+            userId: data.userId,
+            courseId: data.courseId,
+            orderId: data.orderId,
+          },
+          { headers: { 'X-Internal-API-Key': config.internalApiKey }, timeout: 10000 }
+        ),
+        axios.post(
+          `${config.courseServiceUrl}/internal/courses/${data.courseId}/auto-enroll`,
+          {
+            user_id: data.userId,
+          },
+          { headers: { 'X-Internal-API-Key': config.internalApiKey }, timeout: 10000 }
+        ).catch(err => {
+          // Log but do not fail the whole process if auto-enrollment fails, as the core purchase succeeded
+          logger.warn(`Failed to auto-enroll user ${data.userId} into batch for course ${data.courseId}: ${err.message}`);
+        })
+      ]);
     } else if (event_type === 'MEMBERSHIP_ACTIVATED') {
       await axios.post(
         `${config.authServiceUrl}/access/grant-membership`,

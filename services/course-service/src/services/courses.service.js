@@ -1,4 +1,4 @@
-const { Course, CourseCat, Batch, Session, Recording, Material, CoursePageSetting } = require('../models');
+const { Course, CourseCat, Batch, Session, Recording, Material, CoursePageSetting, BatchEnrollment } = require('../models');
 
 const coursesService = {
   async listPublished() {
@@ -44,28 +44,20 @@ const coursesService = {
       attributes: ['id'],
     });
     if (!course) return null;
-    return this._getBatchesSessionsRecordings(courseId);
+    return this._getBatchesSessionsRecordings(courseId, { visibleOnly: true });
   },
 
   /** Same as getSessionsByCourseId but without is_published filter (for admin). */
   async getSessionsByCourseIdInternal(courseId) {
     const course = await Course.findByPk(courseId, { attributes: ['id'] });
     if (!course) return null;
-    return this._getBatchesSessionsRecordings(courseId);
+    return this._getBatchesSessionsRecordings(courseId, { visibleOnly: false });
   },
 
-  async _getBatchesSessionsRecordings(courseId) {
+  async _getBatchesSessionsRecordings(courseId, { visibleOnly = false } = {}) {
     const batches = await Batch.findAll({
       where: { course_id: courseId },
-      order: [['start_date', 'ASC']],
-      include: [
-        {
-          model: Session,
-          as: 'Sessions',
-          required: false,
-          include: [{ model: Recording, as: 'Recordings', required: false }],
-        },
-      ],
+      order: [['created_at', 'ASC']],
     });
 
     const result = [];
@@ -73,7 +65,12 @@ const coursesService = {
       const sessions = await Session.findAll({
         where: { batch_id: b.id },
         order: [['day_number', 'ASC']],
-        include: [{ model: Recording, as: 'Recordings', required: false }],
+        include: [{
+          model: Recording,
+          as: 'Recordings',
+          required: false,
+          ...(visibleOnly ? { where: { is_visible: true } } : {}),
+        }],
       });
       result.push({
         id: b.id,
@@ -81,9 +78,15 @@ const coursesService = {
         start_date: b.start_date,
         end_date: b.end_date,
         meet_link: b.meet_link,
+        created_at: b.created_at,
         sessions: sessions.map((s) => ({
-          ...s.get({ plain: true }),
-          recordings: (s.Recordings || []).map((r) => ({ id: r.id, url: r.url, source: r.source })),
+          id: s.id,
+          batch_id: s.batch_id,
+          day_number: s.day_number,
+          title: s.title,
+          scheduled_at: s.scheduled_at,
+          meet_link: s.meet_link,
+          recordings: (s.Recordings || []).map((r) => ({ id: r.id, url: r.url, source: r.source, is_visible: r.is_visible })),
         })),
       });
     }
@@ -155,7 +158,73 @@ const coursesService = {
     return row.get({ plain: true });
   },
 
-  async createBatch(courseId, data) {
+  async createBatchFromCurriculum(courseId, data) {
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'title', 'curriculum'] });
+    if (!course) return null;
+
+    let curriculum = [];
+    try {
+      curriculum = typeof course.curriculum === 'string' ? JSON.parse(course.curriculum) : (course.curriculum || []);
+    } catch { curriculum = []; }
+
+    if (!Array.isArray(curriculum) || curriculum.length === 0) {
+      const err = new Error('Course has no curriculum items. Add curriculum in the course editor first.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const { start_date, meet_link } = data;
+
+    // Auto-compute end date: start + (curriculum.length - 1) days
+    let end_date = null;
+    if (start_date) {
+      const startMs = new Date(start_date).getTime();
+      end_date = new Date(startMs + (curriculum.length - 1) * 86400000).toISOString().split('T')[0];
+    }
+
+    // Auto-generate batch name
+    const nameDate = start_date ? new Date(start_date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'New';
+    const existingCount = await Batch.count({ where: { course_id: courseId } });
+    const batchName = existingCount === 0 ? 'Default Batch' : `Batch ${existingCount + 1} — ${nameDate}`;
+
+    const batch = await Batch.create({
+      course_id: courseId,
+      name: batchName,
+      start_date: start_date || null,
+      end_date,
+      meet_link: meet_link || null,
+    });
+
+    // Create sessions + recordings from curriculum items
+    for (let i = 0; i < curriculum.length; i++) {
+      const item = curriculum[i];
+      const session = await Session.create({
+        batch_id: batch.id,
+        day_number: i + 1,
+        title: item.title || `Day ${i + 1}`,
+        scheduled_at: null,
+        meet_link: null,
+      });
+
+      // Create recording from curriculum video if present
+      if (item.video) {
+        await Recording.create({
+          session_id: session.id,
+          url: String(item.video),
+          source: 'vimeo',
+          is_visible: false,
+        });
+      }
+    }
+
+    // Return full batch with sessions and recordings
+    return this._getBatchesSessionsRecordings(courseId, { visibleOnly: false }).then(
+      (batches) => batches.find((b) => b.id === batch.id) || batch.get({ plain: true })
+    );
+  },
+
+  /** Raw batch creation (no auto-session creation). Kept for backward compat. */
+  async createBatchRaw(courseId, data) {
     const { name, start_date, end_date, meet_link } = data;
     const row = await Batch.create({
       course_id: courseId,
@@ -206,11 +275,12 @@ const coursesService = {
   },
 
   async addRecording(sessionId, data) {
-    const { url, source } = data;
+    const { url, source, is_visible } = data;
     const row = await Recording.create({
       session_id: sessionId,
       url: url || '',
       source: source || null,
+      is_visible: is_visible ?? false,
     });
     return row.get({ plain: true });
   },
@@ -218,11 +288,88 @@ const coursesService = {
   async updateRecording(recordingId, data) {
     const row = await Recording.findByPk(recordingId);
     if (!row) return null;
-    const { url, source } = data;
+    const { url, source, is_visible } = data;
     if (url !== undefined) row.url = url || '';
     if (source !== undefined) row.source = source || null;
+    if (is_visible !== undefined) row.is_visible = !!is_visible;
     await row.save();
     return row.get({ plain: true });
+  },
+
+  async toggleRecordingVisibility(recordingId, isVisible) {
+    const row = await Recording.findByPk(recordingId);
+    if (!row) return null;
+    row.is_visible = !!isVisible;
+    await row.save();
+    return row.get({ plain: true });
+  },
+
+  async deleteRecording(recordingId) {
+    const row = await Recording.findByPk(recordingId);
+    if (!row) return false;
+    await row.destroy();
+    return true;
+  },
+
+  async deleteSession(sessionId) {
+    const row = await Session.findByPk(sessionId);
+    if (!row) return false;
+    await Recording.destroy({ where: { session_id: sessionId } });
+    await row.destroy();
+    return true;
+  },
+
+  async deleteBatch(batchId) {
+    const row = await Batch.findByPk(batchId);
+    if (!row) return false;
+    const sessions = await Session.findAll({ where: { batch_id: batchId }, attributes: ['id'] });
+    const sessionIds = sessions.map(s => s.id);
+    if (sessionIds.length) {
+      await Recording.destroy({ where: { session_id: sessionIds } });
+    }
+    await Session.destroy({ where: { batch_id: batchId } });
+    await BatchEnrollment.destroy({ where: { batch_id: batchId } });
+    await row.destroy();
+    return true;
+  },
+
+  // ---- Batch Enrollments ----
+  async getBatchEnrollments(batchId) {
+    const rows = await BatchEnrollment.findAll({
+      where: { batch_id: batchId },
+      order: [['enrolled_at', 'DESC']],
+    });
+    return rows.map(r => r.get({ plain: true }));
+  },
+
+  async addBatchEnrollment(batchId, userId) {
+    const [row, created] = await BatchEnrollment.findOrCreate({
+      where: { batch_id: batchId, user_id: userId },
+      defaults: { batch_id: batchId, user_id: userId },
+    });
+    return { ...row.get({ plain: true }), created };
+  },
+
+  async removeBatchEnrollment(enrollmentId) {
+    const row = await BatchEnrollment.findByPk(enrollmentId);
+    if (!row) return false;
+    await row.destroy();
+    return true;
+  },
+
+  async autoEnrollInBatch(courseId, userId) {
+    const batches = await Batch.findAll({
+      where: { course_id: courseId },
+      order: [['created_at', 'DESC']],
+    });
+    if (batches.length === 0) return null;
+
+    const activeBatch = batches[0];
+    const [row, created] = await BatchEnrollment.findOrCreate({
+      where: { batch_id: activeBatch.id, user_id: userId },
+      defaults: { batch_id: activeBatch.id, user_id: userId },
+    });
+    return { ...row.get({ plain: true }), created };
   },
 
   async addMaterial(courseId, data) {

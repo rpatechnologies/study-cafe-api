@@ -14,7 +14,9 @@ module.exports = (sequelize) => {
     {
       tableName: 'batches',
       underscored: true,
-      timestamps: false,
+      timestamps: true,
+      createdAt: 'created_at',
+      updatedAt: false,
     }
   );
   Batch.associate = (models) => {

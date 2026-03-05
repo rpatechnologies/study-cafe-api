@@ -79,6 +79,27 @@ const updateTestimonial = {
     }),
 };
 
+// ── FAQs ────────────────────────────────────────────────────────────
+
+const createFaq = {
+    body: Joi.object({
+        question: Joi.string().required(),
+        answer: Joi.string().required(),
+        sort_order: Joi.number().integer().min(0),
+        is_active: Joi.boolean().default(true),
+    }),
+};
+
+const updateFaq = {
+    params: idParam.params,
+    body: Joi.object({
+        question: Joi.string(),
+        answer: Joi.string(),
+        sort_order: Joi.number().integer().min(0),
+        is_active: Joi.boolean(),
+    }),
+};
+
 // ── Footer ──────────────────────────────────────────────────────────
 
 const upsertFooter = {
@@ -184,6 +205,37 @@ const upsertCmsPage = {
     }),
 };
 
+const createSeoMetadata = {
+    body: Joi.object({
+        page_name: Joi.string().max(255).required(),
+        page_slug: Joi.string().max(255).required(),
+        meta_title: Joi.string().max(255).required(),
+        meta_description: Joi.string().allow('', null),
+        meta_keywords: Joi.string().max(500).allow('', null),
+        canonical_url: Joi.string().max(500).allow('', null),
+        og_title: Joi.string().max(255).allow('', null),
+        og_description: Joi.string().allow('', null),
+        og_image_url: Joi.string().max(500).allow('', null),
+        robots: Joi.string().max(255).allow('', null),
+    }),
+};
+
+const updateSeoMetadata = {
+    params: idParam.params,
+    body: Joi.object({
+        page_name: Joi.string().max(255),
+        page_slug: Joi.string().max(255),
+        meta_title: Joi.string().max(255),
+        meta_description: Joi.string().allow('', null),
+        meta_keywords: Joi.string().max(500).allow('', null),
+        canonical_url: Joi.string().max(500).allow('', null),
+        og_title: Joi.string().max(255).allow('', null),
+        og_description: Joi.string().allow('', null),
+        og_image_url: Joi.string().max(500).allow('', null),
+        robots: Joi.string().max(255).allow('', null),
+    }),
+};
+
 module.exports = {
     idParam,
     slugParam,
@@ -193,6 +245,8 @@ module.exports = {
     updateState,
     createTestimonial,
     updateTestimonial,
+    createFaq,
+    updateFaq,
     upsertFooter,
     createPlan,
     updatePlan,
@@ -200,4 +254,6 @@ module.exports = {
     createArticle,
     updateArticle,
     upsertCmsPage,
+    createSeoMetadata,
+    updateSeoMetadata,
 };

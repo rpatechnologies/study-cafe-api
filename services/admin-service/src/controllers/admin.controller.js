@@ -116,6 +116,53 @@ const updateRecording = asyncHandler(async (req, res) => {
   sendSuccess(res, data);
 });
 
+const toggleRecordingVisibility = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.put(`/internal/recordings/${req.params.id}/visibility`, req.body);
+  await adminLogsService.logAction(adminId, 'TOGGLE_RECORDING_VISIBILITY', 'recording', req.params.id, { is_visible: req.body.is_visible }, req.ip);
+  sendSuccess(res, data);
+});
+
+const deleteRecording = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.delete(`/internal/recordings/${req.params.id}`);
+  await adminLogsService.logAction(adminId, 'DELETE_RECORDING', 'recording', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
+
+const deleteSession = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.delete(`/internal/sessions/${req.params.id}`);
+  await adminLogsService.logAction(adminId, 'DELETE_SESSION', 'session', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
+
+const deleteBatch = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.delete(`/internal/batches/${req.params.id}`);
+  await adminLogsService.logAction(adminId, 'DELETE_BATCH', 'batch', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
+
+const getBatchEnrollments = asyncHandler(async (req, res) => {
+  const { data } = await courseClient.get(`/internal/batches/${req.params.id}/enrollments`);
+  sendSuccess(res, Array.isArray(data) ? data : data || []);
+});
+
+const addBatchEnrollment = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.post(`/internal/batches/${req.params.id}/enrollments`, req.body);
+  await adminLogsService.logAction(adminId, 'ADD_BATCH_ENROLLMENT', 'batch_enrollment', String(data.id), { batchId: req.params.id, userId: req.body.user_id }, req.ip);
+  sendCreated(res, data);
+});
+
+const removeBatchEnrollment = asyncHandler(async (req, res) => {
+  const adminId = getAdminId(req);
+  const { data } = await courseClient.delete(`/internal/batch-enrollments/${req.params.id}`);
+  await adminLogsService.logAction(adminId, 'REMOVE_BATCH_ENROLLMENT', 'batch_enrollment', req.params.id, {}, req.ip);
+  sendSuccess(res, data);
+});
+
 const getCourseCats = asyncHandler(async (req, res) => {
   const { data } = await courseClient.get('/internal/course-cats');
   sendSuccess(res, Array.isArray(data) ? data : data || []);
@@ -169,6 +216,17 @@ const platform = {
   postTestimonial: platformProxy((c, req) => c.post('/internal/platform/testimonials', req.body).then((r) => ({ data: r.data, status: 201 }))),
   putTestimonial: platformProxy((c, req) => c.put(`/internal/platform/testimonials/${req.params.id}`, req.body).then((r) => ({ data: r.data }))),
   deleteTestimonial: platformProxy((c, req) => c.delete(`/internal/platform/testimonials/${req.params.id}`).then(() => ({ status: 204 }))),
+  getFaqs: platformProxy((c) => c.get('/internal/platform/faqs').then((r) => ({ data: r.data }))),
+  getFaq: platformProxy((c, req) => c.get(`/internal/platform/faqs/${req.params.id}`).then((r) => ({ data: r.data }))),
+  postFaq: platformProxy((c, req) => c.post('/internal/platform/faqs', req.body).then((r) => ({ data: r.data, status: 201 }))),
+  putFaq: platformProxy((c, req) => c.put(`/internal/platform/faqs/${req.params.id}`, req.body).then((r) => ({ data: r.data }))),
+  deleteFaq: platformProxy((c, req) => c.delete(`/internal/platform/faqs/${req.params.id}`).then(() => ({ status: 204 }))),
+  getSeoMetadata: platformProxy((c) => c.get('/internal/platform/seo-metadata').then((r) => ({ data: r.data }))),
+  getSeoMetadataById: platformProxy((c, req) => c.get(`/internal/platform/seo-metadata/${req.params.id}`).then((r) => ({ data: r.data }))),
+  getSeoMetadataBySlug: platformProxy((c, req) => c.get(`/internal/platform/seo-metadata/slug/${req.params.slug}`).then((r) => ({ data: r.data }))),
+  postSeoMetadata: platformProxy((c, req) => c.post('/internal/platform/seo-metadata', req.body).then((r) => ({ data: r.data, status: 201 }))),
+  putSeoMetadata: platformProxy((c, req) => c.put(`/internal/platform/seo-metadata/${req.params.id}`, req.body).then((r) => ({ data: r.data }))),
+  deleteSeoMetadata: platformProxy((c, req) => c.delete(`/internal/platform/seo-metadata/${req.params.id}`).then(() => ({ status: 204 }))),
   getFooter: platformProxy((c) => c.get('/internal/platform/footer').then((r) => ({ data: r.data }))),
   putFooter: platformProxy((c, req) => c.put(`/internal/platform/footer/${req.params.key}`, req.body).then((r) => ({ data: r.data }))),
   getPlans: platformProxy((c) => c.get('/internal/platform/plans').then((r) => ({ data: r.data }))),
@@ -216,6 +274,13 @@ module.exports = {
   updateSession,
   addRecording,
   updateRecording,
+  toggleRecordingVisibility,
+  deleteRecording,
+  deleteSession,
+  deleteBatch,
+  getBatchEnrollments,
+  addBatchEnrollment,
+  removeBatchEnrollment,
   addMaterial,
   getCourses,
   getCourse,

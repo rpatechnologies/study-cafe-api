@@ -25,6 +25,18 @@ function register(router) {
   router.put('/internal/recordings/:id', internalAuth, validate(schemas.updateRecording), coursesController.updateRecording);
   router.post('/internal/courses/:id/materials', internalAuth, validate(schemas.addMaterial), coursesController.addMaterial);
 
+  // Recording visibility & delete
+  router.put('/internal/recordings/:id/visibility', internalAuth, validate(schemas.toggleVisibility), coursesController.toggleRecordingVisibility);
+  router.delete('/internal/recordings/:id', internalAuth, validate(schemas.idParam), coursesController.deleteRecording);
+  router.delete('/internal/sessions/:id', internalAuth, validate(schemas.idParam), coursesController.deleteSession);
+  router.delete('/internal/batches/:id', internalAuth, validate(schemas.idParam), coursesController.deleteBatch);
+
+  // Batch enrollments
+  router.get('/internal/batches/:id/enrollments', internalAuth, validate(schemas.idParam), coursesController.getBatchEnrollments);
+  router.post('/internal/batches/:id/enrollments', internalAuth, validate(schemas.addBatchEnrollment), coursesController.addBatchEnrollment);
+  router.delete('/internal/batch-enrollments/:id', internalAuth, validate(schemas.idParam), coursesController.removeBatchEnrollment);
+  router.post('/internal/courses/:id/auto-enroll', internalAuth, validate(schemas.addBatchEnrollment), coursesController.autoEnrollBatch);
+
   // Course Page Settings
   router.get('/internal/course-page-settings', internalAuth, coursesController.getPageSettings);
   router.put('/internal/course-page-settings/:key', internalAuth, validate(schemas.updatePageSetting), coursesController.updatePageSetting);

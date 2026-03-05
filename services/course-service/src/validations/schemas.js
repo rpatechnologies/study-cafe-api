@@ -78,7 +78,7 @@ const updateCourse = {
 const createBatch = {
     params: idParam.params,
     body: Joi.object({
-        name: Joi.string().max(255).required(),
+        name: Joi.string().max(255).allow('', null),
         start_date: Joi.date().iso().allow(null),
         end_date: Joi.date().iso().allow(null),
         meet_link: Joi.string().uri().allow('', null),
@@ -122,8 +122,9 @@ const updateSession = {
 const addRecording = {
     params: idParam.params,
     body: Joi.object({
-        url: Joi.string().uri().required(),
+        url: Joi.string().max(512).required(),
         source: Joi.string().max(64).allow('', null),
+        is_visible: Joi.boolean(),
     }),
 };
 
@@ -136,9 +137,24 @@ const recordingIdParam = {
 const updateRecording = {
     params: recordingIdParam.params,
     body: Joi.object({
-        url: Joi.string().uri().allow(''),
+        url: Joi.string().max(512).allow(''),
         source: Joi.string().max(255).allow('', null),
+        is_visible: Joi.boolean(),
     }).min(1),
+};
+
+const toggleVisibility = {
+    params: idParam.params,
+    body: Joi.object({
+        is_visible: Joi.boolean().required(),
+    }),
+};
+
+const addBatchEnrollment = {
+    params: idParam.params,
+    body: Joi.object({
+        user_id: Joi.number().integer().positive().required(),
+    }),
 };
 
 // ── Materials ──────────────────────────────────────────────────────
@@ -173,6 +189,8 @@ module.exports = {
     updateSession,
     addRecording,
     updateRecording,
+    toggleVisibility,
+    addBatchEnrollment,
     addMaterial,
     updatePageSetting,
 };

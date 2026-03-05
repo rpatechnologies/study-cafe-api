@@ -468,7 +468,8 @@ async function createAllTables(tgt) {
       name VARCHAR(255) NOT NULL DEFAULT '',
       start_date DATE,
       end_date DATE,
-      meet_link VARCHAR(512)
+      meet_link VARCHAR(512),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
     -- Sessions (course-service)
@@ -486,7 +487,17 @@ async function createAllTables(tgt) {
       id INT AUTO_INCREMENT PRIMARY KEY,
       session_id INT NOT NULL,
       url VARCHAR(512) NOT NULL DEFAULT '',
-      source VARCHAR(255)
+      source VARCHAR(255),
+      is_visible BOOLEAN NOT NULL DEFAULT false
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+    -- Batch Enrollments (course-service)
+    CREATE TABLE IF NOT EXISTS batch_enrollments (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      batch_id INT NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_batch_user (batch_id, user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
     -- Materials (course-service)
@@ -615,6 +626,17 @@ async function createAllTables(tgt) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+    -- FAQs (platform-service)
+    CREATE TABLE IF NOT EXISTS faqs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
     -- Footer Data (platform-service)
     CREATE TABLE IF NOT EXISTS footer_data (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -685,7 +707,7 @@ async function ensurePremiumPlansColumns(tgt) {
 /** Truncate all data tables on target (3307) so we can do a full re-sync. */
 async function clearTargetDatabase(tgt) {
     const tables = [
-        'plan_course_categories', 'plan_courses', 'premium_plans', 'footer_data', 'testimonials', 'states', 'home_sections',
+        'plan_course_categories', 'plan_courses', 'premium_plans', 'footer_data', 'testimonials', 'faqs', 'states', 'home_sections',
         'payment_config', 'admin_logs', 'coupons', 'outbox_events', 'payments', 'orders', 'materials', 'recordings', 'sessions',
         'batches', 'enrollments', 'course_authors', 'forum_topics', 'media', 'redirections', 'pages', 'file_categories', 'files',
         'file_cats', 'course_categories', 'course_cats', 'courses', 'comments', 'article_courts', 'article_types_map', 'article_tags',

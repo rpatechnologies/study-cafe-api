@@ -41,6 +41,8 @@ const FooterData = require('./FooterData')(sequelize);
 const PremiumPlan = require('./PremiumPlan')(sequelize);
 const PlanCourse = require('./PlanCourse')(sequelize);
 const PlanCourseCategory = require('./PlanCourseCategory')(sequelize);
+const Faq = require('./Faq')(sequelize);
+const SeoMetadata = require('./SeoMetadata')(sequelize);
 
 Article.associate({ Comment, Category, Tag, ArticleType, Court, ArticleCategoryMap, ArticleTagMap, ArticleTypeMap, ArticleCourtMap });
 
@@ -49,7 +51,7 @@ const models = {
   Category, Tag, ArticleType, Court,
   ArticleCategoryMap, ArticleTagMap, ArticleTypeMap, ArticleCourtMap,
   CmsPage,
-  HomeSection, State, Testimonial, FooterData, PremiumPlan, PlanCourse, PlanCourseCategory,
+  HomeSection, State, Testimonial, FooterData, PremiumPlan, PlanCourse, PlanCourseCategory, Faq, SeoMetadata,
 };
 
 async function connect() {

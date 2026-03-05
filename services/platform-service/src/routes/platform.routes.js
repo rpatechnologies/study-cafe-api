@@ -27,6 +27,17 @@ function register(router) {
   router.post('/internal/platform/testimonials', internalAuth, validate(schemas.createTestimonial), controller.createTestimonial);
   router.put('/internal/platform/testimonials/:id', internalAuth, validate(schemas.updateTestimonial), controller.updateTestimonial);
   router.delete('/internal/platform/testimonials/:id', internalAuth, validate(schemas.idParam), controller.deleteTestimonial);
+  router.get('/internal/platform/faqs', internalAuth, controller.getFaqsInternal);
+  router.get('/internal/platform/faqs/:id', internalAuth, validate(schemas.idParam), controller.getFaqInternal);
+  router.post('/internal/platform/faqs', internalAuth, validate(schemas.createFaq), controller.createFaq);
+  router.put('/internal/platform/faqs/:id', internalAuth, validate(schemas.updateFaq), controller.updateFaq);
+  router.delete('/internal/platform/faqs/:id', internalAuth, validate(schemas.idParam), controller.deleteFaq);
+  router.get('/internal/platform/seo-metadata', internalAuth, controller.getSeoMetadataInternal);
+  router.get('/internal/platform/seo-metadata/:id', internalAuth, validate(schemas.idParam), controller.getSeoMetadataByIdInternal);
+  router.get('/internal/platform/seo-metadata/slug/:slug', internalAuth, validate(schemas.slugParam), controller.getSeoMetadataBySlugPublic);
+  router.post('/internal/platform/seo-metadata', internalAuth, validate(schemas.createSeoMetadata), controller.createSeoMetadata);
+  router.put('/internal/platform/seo-metadata/:id', internalAuth, validate(schemas.updateSeoMetadata), controller.updateSeoMetadata);
+  router.delete('/internal/platform/seo-metadata/:id', internalAuth, validate(schemas.idParam), controller.deleteSeoMetadata);
   router.get('/internal/platform/footer', internalAuth, controller.getFooterInternal);
   router.put('/internal/platform/footer/:key', internalAuth, validate(schemas.upsertFooter), controller.upsertFooter);
   router.get('/internal/platform/plans', internalAuth, controller.getPlansInternal);
